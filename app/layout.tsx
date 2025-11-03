@@ -3,7 +3,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google"; 
 import "./globals.css";
-
+import { Toaster } from "@/components/ui/sonner"
 import { Providers } from "@/lib/providers";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
@@ -37,6 +37,7 @@ export default function RootLayout({
             {/* FIXED: Added container, mx-auto, and responsive padding for horizontal breathing space */}
             <main className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
               {children}
+              <Toaster />
             </main>
             <Footer />
           </div>
