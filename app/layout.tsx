@@ -1,15 +1,13 @@
 // app/layout.tsx
 
 import type { Metadata } from "next";
-// NOTE: We're using the default Next.js Inter font, but a more elegant font (like a serif or stylized sans-serif) 
-// would be ideal for a luxury brand. For this guide, we stick to Inter for simplicity.
 import { Inter } from "next/font/google"; 
 import "./globals.css";
 
 import { Providers } from "@/lib/providers";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
-import { cn } from "@/lib/utils"; // cn utility for combining classes
+import { cn } from "@/lib/utils";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -29,19 +27,15 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      {/* The cn utility combines classes and handles Tailwind merge conflicts.
-        We apply the font variable to the body.
-      */}
       <body className={cn(
         "min-h-screen bg-background font-sans antialiased",
         inter.variable
       )}>
-        {/* Wrap content with global providers (like TanStack Query) */}
         <Providers>
           <div className="flex min-h-screen flex-col">
             <Header />
-            {/* Main content area, uses flex-grow to push the footer to the bottom */}
-            <main className="flex-grow">
+            {/* FIXED: Added container, mx-auto, and responsive padding for horizontal breathing space */}
+            <main className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
               {children}
             </main>
             <Footer />
