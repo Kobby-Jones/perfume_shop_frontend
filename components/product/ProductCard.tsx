@@ -9,6 +9,7 @@ import { ShoppingCart, Heart } from 'lucide-react';
 import { Product } from '@/lib/data/mock-products';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { useCart } from '@/lib/hooks/useCart'; // Import the cart hook
 
 interface ProductCardProps {
   product: Product;
@@ -20,11 +21,21 @@ interface ProductCardProps {
  */
 export function ProductCard({ product }: ProductCardProps) {
   const isOutOfStock = product.availableStock <= 0;
+  const { addToCart } = useCart(); // Use the cart hook
 
   const formattedPrice = new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'GHS',
   }).format(product.price);
+
+  // Function to handle adding the product to the cart
+  const handleAddToCart = (e: React.MouseEvent) => {
+    e.preventDefault(); // Prevent navigating to the product page when clicking the button
+    // Adds 1 unit of the product to the cart
+    addToCart(product.id, 1); 
+    // NOTE: You would typically add a toast notification here for excellent UX
+    console.log(`Added ${product.name} to cart via card.`);
+  };
 
   return (
     <Card className="group overflow-hidden border-0 shadow-sm hover:shadow-md transition-all duration-300 bg-white">
@@ -79,6 +90,7 @@ export function ProductCard({ product }: ProductCardProps) {
             disabled={isOutOfStock}
             onClick={(e) => {
               e.preventDefault();
+                handleAddToCart(e);
               console.log(`Added ${product.name} to cart`);
             }}
           >

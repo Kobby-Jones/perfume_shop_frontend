@@ -21,7 +21,7 @@ export default function CartPage() {
 
   // Format currency
   const formatCurrency = (amount: number) => 
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'GHS' }).format(amount);
 
   // Mock Shipping and Tax (fixed values for UI display)
   const mockShippingCost = cartTotal >= 100 ? 0 : 15.00;

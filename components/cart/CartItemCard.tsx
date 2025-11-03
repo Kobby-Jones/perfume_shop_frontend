@@ -29,8 +29,8 @@ export function CartItemCard({ item }: CartItemCardProps) {
   // Guard check (shouldn't happen if filtered in useCart, but safe practice)
   if (!product) return null; 
 
-  const formattedPrice = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(product.price);
-  const formattedSubtotal = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(subtotal);
+  const formattedPrice = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'GHS' }).format(product.price);
+  const formattedSubtotal = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'GHS' }).format(subtotal);
 
   return (
     <div className="flex flex-col sm:flex-row items-start sm:items-center py-4 border-b border-border">
