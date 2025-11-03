@@ -4,6 +4,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
+import { CartProvider } from './hooks/useCart';
 
 // Create a client instance outside of the component to prevent re-instantiation on every render.
 // We disable window focus refetching to enhance UX and performance by default.
@@ -18,17 +19,16 @@ const queryClient = new QueryClient({
 
 /**
  * Global provider component to wrap the entire application.
- * Includes TanStack Query (React Query) for state management and data fetching.
- * Future providers (e.g., CartProvider, AuthProvider) will be nested here.
- * @param children - The child components to be rendered within the context.
+ * Now includes TanStack Query and CartProvider.
+ * @param children - The child components.
  */
 export function Providers({ children }: { children: React.ReactNode }) {
-  return (
-    <QueryClientProvider client={queryClient}>
-      {/* NOTE: Future providers (e.g., CartProvider, AuthProvider) 
-        should be nested here to provide global state. 
-      */}
-      {children}
-    </QueryClientProvider>
-  );
-}
+    return (
+      <QueryClientProvider client={queryClient}>
+        {/* Nesting CartProvider here makes cart state available globally */}
+        <CartProvider> 
+          {children}
+        </CartProvider>
+      </QueryClientProvider>
+    );
+  }

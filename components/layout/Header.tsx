@@ -1,4 +1,5 @@
 // components/layout/Header.tsx
+'use client';
 
 import Link from 'next/link';
 import { Menu, Search, User, ShoppingCart } from 'lucide-react';
@@ -6,7 +7,7 @@ import { Menu, Search, User, ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
-
+import { useCart } from '@/lib/hooks/useCart'; // Import the hook
 /**
  * Main navigation links for the application.
  */
@@ -22,7 +23,7 @@ const navLinks = [
  * The design is mobile-first, using a Sheet component for the main menu on small screens.
  */
 export function Header() {
-  // NOTE: Cart count state and user status check (logged in/out) will be implemented here later.
+    const { totalItems } = useCart(); // Get the total item count
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -88,10 +89,13 @@ export function Header() {
           <Link href="/cart">
             <Button variant="ghost" size="icon" className="relative" aria-label="Shopping Cart">
               <ShoppingCart className="h-5 w-5" />
-              {/* Mock Cart Count Indicator (Will be dynamic later) */}
-              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-xs font-bold text-accent-foreground">
-                3
-              </span>
+              {/* Dynamic Cart Count Indicator */}
+              {totalItems > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                  {/* Display count, limiting to 9+ for small badge size */}
+                  {totalItems > 9 ? '9+' : totalItems} 
+                </span>
+              )}
             </Button>
           </Link>
         </div>
