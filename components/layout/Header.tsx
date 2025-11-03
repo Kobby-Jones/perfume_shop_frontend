@@ -2,12 +2,14 @@
 'use client';
 
 import Link from 'next/link';
-import { Menu, Search, User, ShoppingCart } from 'lucide-react';
-
+import { Menu, Search, User, ShoppingCart, LogOut } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
-import { useCart } from '@/lib/hooks/useCart'; // Import the hook
+import { useCart } from '@/lib/hooks/useCart';
+import { useAuth } from '@/lib/hooks/useAuth'; 
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'; 
 /**
  * Main navigation links for the application.
  */
@@ -24,6 +26,13 @@ const navLinks = [
  */
 export function Header() {
     const { totalItems } = useCart(); // Get the total item count
+    const { isLoggedIn, user, logout } = useAuth(); // Get auth state and actions
+    const router = useRouter();
+
+    const handleLogout = () => {
+        logout();
+        router.push('/account/login'); // Redirect to login page after signing out
+      };
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -81,11 +90,44 @@ export function Header() {
           <Button variant="ghost" size="icon" aria-label="Search">
             <Search className="h-5 w-5" />
           </Button>
-          <Link href="/account">
-            <Button variant="ghost" size="icon" aria-label="User Account">
-              <User className="h-5 w-5" />
-            </Button>
-          </Link>
+          {/* User/Auth Button: Dynamic Login or Dropdown Menu */}
+          {isLoggedIn ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label="User Account Menu">
+                  {/* Show initials or a custom avatar here in production */}
+                  <User className="h-5 w-5 text-primary" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>Welcome, {user?.name.split(' ')[0] || 'User'}</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <Link href="/account">
+                    <DropdownMenuItem>Dashboard</DropdownMenuItem>
+                </Link>
+                <Link href="/account/orders">
+                    <DropdownMenuItem>Order History</DropdownMenuItem>
+                </Link>
+                <Link href="/account/settings">
+                    <DropdownMenuItem>Settings</DropdownMenuItem>
+                </Link>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem 
+                    onClick={handleLogout} 
+                    className="text-red-500 cursor-pointer"
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  <span>Log Out</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Link href="/account/login">
+              <Button variant="ghost" size="icon" aria-label="Login or Register">
+                <User className="h-5 w-5" />
+              </Button>
+            </Link>
+          )}
           <Link href="/cart">
             <Button variant="ghost" size="icon" className="relative" aria-label="Shopping Cart">
               <ShoppingCart className="h-5 w-5" />
