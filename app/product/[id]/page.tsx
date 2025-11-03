@@ -54,6 +54,8 @@ export default function ProductDetailPage() {
 
   // --- Helper Functions ---
 
+  
+
   const formatPrice = (price: number) => 
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'GHS' }).format(price);
   

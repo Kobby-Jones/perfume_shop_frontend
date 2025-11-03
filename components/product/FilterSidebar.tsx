@@ -78,7 +78,7 @@ export function FilterSidebar({ onFilterChange }: { onFilterChange: (filters: an
       <div className="space-y-4">
         <h4 className="text-lg font-semibold text-foreground">Price Range</h4>
         <Label className="block text-sm font-medium text-primary">
-            ${priceRange[0].toFixed(0)} - ${priceRange[1].toFixed(0)}
+            GHS {priceRange[0].toFixed(0)} - GHS {priceRange[1].toFixed(0)}
         </Label>
         <Slider
           min={priceRangeMin}
