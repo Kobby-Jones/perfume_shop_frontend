@@ -21,7 +21,7 @@ export default function HomePage() {
       {/* 3. Promotional Banner 1 (e.g., Free Shipping) */}
       <PromotionalBanner 
         title="Complimentary Shipping"
-        subtitle="On all orders above $100. Delivered directly to your door."
+        subtitle="On all orders above GHS 100. Delivered directly to your door."
         bgColor="bg-accent text-accent-foreground"
         ctaText="See Details"
         ctaLink="/info/shipping"

@@ -53,7 +53,7 @@ export function PaymentStep({ prevStep }: { prevStep: () => void }) {
                 type="tel" 
                 placeholder="Phone Number" 
                 className="w-full p-3 border rounded-md focus:ring-primary focus:border-primary transition-colors"
-                defaultValue="08012345678"
+                defaultValue="0244556677"
             />
             
             <div className="flex items-center space-x-2 pt-2">

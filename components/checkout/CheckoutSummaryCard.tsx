@@ -16,7 +16,7 @@ interface CheckoutSummaryCardProps {
  */
 export function CheckoutSummaryCard({ cartTotal, shippingOption }: CheckoutSummaryCardProps) {
     const formatCurrency = (amount: number) => 
-        new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+        new Intl.NumberFormat('en-US', { style: 'currency', currency: 'GHS' }).format(amount);
 
     // Dynamic Costs
     const shippingCost = shippingOption === 'express' ? 25.00 : cartTotal >= 100 ? 0 : 15.00;

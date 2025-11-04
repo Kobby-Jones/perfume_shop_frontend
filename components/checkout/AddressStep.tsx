@@ -32,7 +32,7 @@ export function AddressStep({ nextStep, setData }: { nextStep: () => void, setDa
   const form = useForm<AddressFormData>({
     resolver: zodResolver(addressSchema),
     defaultValues: {
-      firstName: '', lastName: '', street: '', city: '', zip: '', country: 'USA'
+      firstName: '', lastName: '', street: '', city: '', zip: '', country: 'Ghana'
     },
   });
 
@@ -55,7 +55,7 @@ export function AddressStep({ nextStep, setData }: { nextStep: () => void, setDa
           <FormField control={form.control} name="lastName" render={({ field }) => (
             <FormItem>
               <FormLabel>Last Name</FormLabel>
-              <FormControl><Input placeholder="Doe" {...field} /></FormControl>
+              <FormControl><Input placeholder="Etornam" {...field} /></FormControl>
               <FormMessage />
             </FormItem>
           )} />
@@ -64,7 +64,7 @@ export function AddressStep({ nextStep, setData }: { nextStep: () => void, setDa
         <FormField control={form.control} name="street" render={({ field }) => (
           <FormItem>
             <FormLabel>Street Address</FormLabel>
-            <FormControl><Input placeholder="123 Luxury Lane" {...field} /></FormControl>
+            <FormControl><Input placeholder="Zongo one Lane" {...field} /></FormControl>
             <FormMessage />
           </FormItem>
         )} />
@@ -73,21 +73,21 @@ export function AddressStep({ nextStep, setData }: { nextStep: () => void, setDa
           <FormField control={form.control} name="city" render={({ field }) => (
             <FormItem>
               <FormLabel>City</FormLabel>
-              <FormControl><Input placeholder="New York" {...field} /></FormControl>
+              <FormControl><Input placeholder="Sunyani" {...field} /></FormControl>
               <FormMessage />
             </FormItem>
           )} />
           <FormField control={form.control} name="zip" render={({ field }) => (
             <FormItem>
               <FormLabel>ZIP / Postal Code</FormLabel>
-              <FormControl><Input placeholder="10001" {...field} /></FormControl>
+              <FormControl><Input placeholder="00233" {...field} /></FormControl>
               <FormMessage />
             </FormItem>
           )} />
           <FormField control={form.control} name="country" render={({ field }) => (
             <FormItem>
               <FormLabel>Country</FormLabel>
-              <FormControl><Input placeholder="United States" {...field} /></FormControl>
+              <FormControl><Input placeholder="Ghana" {...field} /></FormControl>
               <FormMessage />
             </FormItem>
           )} />

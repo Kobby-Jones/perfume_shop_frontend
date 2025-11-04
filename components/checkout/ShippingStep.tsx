@@ -28,7 +28,7 @@ export function ShippingStep({ nextStep, prevStep, data, setData }: { nextStep: 
           <RadioGroupItem value="standard" id="standard" className="mt-1" />
           <Label htmlFor="standard" className="flex flex-col flex-1 cursor-pointer">
             <span className="font-semibold text-base">Standard Shipping (3-5 Days)</span>
-            <span className="text-sm text-foreground/70">Free on orders over $100, otherwise $15.00</span>
+            <span className="text-sm text-foreground/70">Free on orders over GHS 100, otherwise GHS 15.00</span>
           </Label>
         </div>
         
@@ -36,7 +36,7 @@ export function ShippingStep({ nextStep, prevStep, data, setData }: { nextStep: 
           <RadioGroupItem value="express" id="express" className="mt-1" />
           <Label htmlFor="express" className="flex flex-col flex-1 cursor-pointer">
             <span className="font-semibold text-base">Express Shipping (1-2 Days)</span>
-            <span className="text-sm text-foreground/70">Flat rate of $25.00</span>
+            <span className="text-sm text-foreground/70">Flat rate of GHS 25.00</span>
           </Label>
         </div>
       </RadioGroup>
