@@ -1,27 +1,36 @@
-// lib/hooks/useCart.tsx
-
 'use client';
 
-import React, { createContext, useContext, useState, useMemo, useCallback } from 'react';
-import { Product, MOCK_PRODUCTS } from '@/lib/data/mock-products';
+import React, { createContext, useContext, useMemo, useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
+import { apiFetch } from '@/lib/api/httpClient';
+import { useAuth } from '@/lib/hooks/useAuth';
+import { toast } from 'sonner'; // ✅ Using Sonner instead of useToast
+import { Product } from '@/lib/data/mock-products';
 
-/**
- * Interface for a single item within the shopping cart.
- */
-interface CartItem {
-  productId: number;
-  quantity: number;
-  // NOTE: We don't store the full Product object here; we look it up for current data.
+// --- API Response & Type Definitions ---
+interface CartResponse {
+  items: CartDetailItem[];
+  totals: {
+    subtotal: number;
+    tax: number;
+    shipping: number;
+    grandTotal: number;
+  };
 }
 
-/**
- * Interface for the context value provided by the CartProvider.
- */
+export interface CartDetailItem {
+  productId: number;
+  quantity: number;
+  product: Product;
+  subtotal: number;
+}
+
 interface CartContextType {
-  cartItems: CartItem[];
-  cartDetails: (CartItem & { product: Product | undefined; subtotal: number })[];
-  totalItems: number;
+  cartDetails: CartDetailItem[];
   cartTotal: number;
+  totalItems: number;
+  totals: CartResponse['totals'] | undefined;
   isLoading: boolean;
   addToCart: (productId: number, quantity?: number) => void;
   removeFromCart: (productId: number) => void;
@@ -29,100 +38,121 @@ interface CartContextType {
   clearCart: () => void;
 }
 
-// Default context values
 const CartContext = createContext<CartContextType | undefined>(undefined);
+const CART_QUERY_KEY = 'cart';
 
 /**
- * Custom hook to manage all cart logic (add, remove, update, calculation).
- * In a production app, this would use localStorage for persistence or integrate with a server endpoint.
+ * Core cart logic integrated with backend, auth, and Sonner notifications
  */
 const useCartLogic = () => {
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  
-  // NOTE: In a real app, product data would be fetched asynchronously here.
-  // Using MOCK_PRODUCTS directly for synchronous data look-up.
-  const productDataMap = useMemo(() => {
-    return MOCK_PRODUCTS.reduce((acc, product) => {
-      acc.set(product.id, product);
-      return acc;
-    }, new Map<number, Product>());
-  }, []);
+  const queryClient = useQueryClient();
+  const { isLoggedIn } = useAuth();
+  const router = useRouter();
 
-  /**
-   * Memoized array containing detailed cart item information (for rendering).
-   * Calculates subtotal and looks up product details.
-   */
-  const cartDetails = useMemo(() => {
-    return cartItems.map(item => {
-      const product = productDataMap.get(item.productId);
-      const subtotal = product ? product.price * item.quantity : 0;
-      return {
-        ...item,
-        product,
-        subtotal,
-      };
-    }).filter(detail => detail.product); // Filter out items where product data lookup failed
-  }, [cartItems, productDataMap]);
+  // --- 1. Fetch Cart Data (Only when logged in) ---
+  const { data, isLoading } = useQuery<CartResponse>({
+    queryKey: [CART_QUERY_KEY],
+    queryFn: () => apiFetch('/cart'),
+    enabled: isLoggedIn, // Fetch only if authenticated
+  });
 
+  const cartDetails = data?.items || [];
+  const totals = data?.totals;
+  const cartTotal = totals?.subtotal || 0;
 
-  /**
-   * Calculates the total number of items and the grand total price.
-   */
-  const { totalItems, cartTotal } = useMemo(() => {
-    const total = cartDetails.reduce((sum, item) => sum + item.subtotal, 0);
-    const count = cartDetails.reduce((sum, item) => sum + item.quantity, 0);
-    return { totalItems: count, cartTotal: total };
-  }, [cartDetails]);
+  // --- 2. Derived Values ---
+  const totalItems = useMemo(
+    () => cartDetails.reduce((sum, item) => sum + item.quantity, 0),
+    [cartDetails]
+  );
 
+  // --- 3. Mutations ---
+  const mutation = useMutation({
+    mutationFn: ({ productId, quantity }: { productId: number; quantity: number }) =>
+      apiFetch('/cart', {
+        method: 'POST',
+        body: JSON.stringify({ productId, quantity }),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [CART_QUERY_KEY] });
+      toast.success('Item added to cart');
+    },
+    onError: (error: any) => {
+      console.error('Cart update failed:', error);
+      toast.error(error.message || 'Failed to update cart. Please try again.');
+    },
+  });
 
-  // --- Cart Mutation Functions ---
+  const removeMutation = useMutation({
+    mutationFn: (productId: number) =>
+      apiFetch(`/cart/${productId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [CART_QUERY_KEY] });
+      toast.success('Item removed from cart');
+    },
+    onError: (error: any) => {
+      console.error('Cart item removal failed:', error);
+      toast.error(error.message || 'Failed to remove item. Try again.');
+    },
+  });
 
-  const addToCart = useCallback((productId: number, quantity: number = 1) => {
-    setCartItems(prevItems => {
-      const existingItem = prevItems.find(item => item.productId === productId);
-      
-      if (existingItem) {
-        // If product exists, increment quantity
-        return prevItems.map(item =>
-          item.productId === productId
-            ? { ...item, quantity: item.quantity + quantity }
-            : item
-        );
-      } else {
-        // If new product, add to cart
-        return [...prevItems, { productId, quantity }];
+  // --- 4. Auth-Protected Actions ---
+  const checkAuthAndProceed = useCallback(
+    (action: () => void) => {
+      if (!isLoggedIn) {
+        toast.warning('Please sign in to manage your cart');
+        router.push('/account/auth/login');
+        return;
       }
-    });
-  }, []);
+      action();
+    },
+    [isLoggedIn, router]
+  );
 
-  const removeFromCart = useCallback((productId: number) => {
-    setCartItems(prevItems => 
-      prevItems.filter(item => item.productId !== productId)
-    );
-  }, []);
+  // --- 5. Cart Actions ---
+  const addToCart = useCallback(
+    (productId: number, quantity: number = 1) => {
+      checkAuthAndProceed(() => {
+        const existingItem = cartDetails.find(
+          (item) => item.productId === productId
+        );
+        const newQuantity = (existingItem?.quantity || 0) + quantity;
+        mutation.mutate({ productId, quantity: newQuantity });
+      });
+    },
+    [cartDetails, mutation, checkAuthAndProceed]
+  );
 
-  const updateQuantity = useCallback((productId: number, quantity: number) => {
-    if (quantity <= 0) {
-      removeFromCart(productId);
-      return;
-    }
-    setCartItems(prevItems =>
-      prevItems.map(item =>
-        item.productId === productId ? { ...item, quantity } : item
-      )
-    );
-  }, [removeFromCart]);
+  const updateQuantity = useCallback(
+    (productId: number, quantity: number) => {
+      checkAuthAndProceed(() => {
+        if (quantity <= 0) {
+          removeMutation.mutate(productId);
+          return;
+        }
+        mutation.mutate({ productId, quantity });
+      });
+    },
+    [mutation, removeMutation, checkAuthAndProceed]
+  );
+
+  const removeFromCart = useCallback(
+    (productId: number) => {
+      checkAuthAndProceed(() => removeMutation.mutate(productId));
+    },
+    [removeMutation, checkAuthAndProceed]
+  );
 
   const clearCart = useCallback(() => {
-    setCartItems([]);
+    toast.info('Clear cart feature not yet implemented');
   }, []);
 
+  // --- 6. Return All Cart Utilities ---
   return {
-    cartItems,
     cartDetails,
-    totalItems,
     cartTotal,
+    totalItems,
+    totals,
     isLoading,
     addToCart,
     removeFromCart,
@@ -131,22 +161,14 @@ const useCartLogic = () => {
   };
 };
 
-/**
- * Cart Context Provider component.
- */
+// --- Provider & Hook ---
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const cart = useCartLogic();
   return <CartContext.Provider value={cart}>{children}</CartContext.Provider>;
 }
 
-/**
- * Hook to consume the cart context.
- * @returns The cart context object with all state and actions.
- */
 export const useCart = () => {
   const context = useContext(CartContext);
-  if (context === undefined) {
-    throw new Error('useCart must be used within a CartProvider');
-  }
+  if (!context) throw new Error('useCart must be used within a CartProvider');
   return context;
 };

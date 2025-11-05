@@ -2,59 +2,131 @@
 
 'use client';
 
-import { createContext, useContext, useState, useMemo, ReactNode } from 'react';
+import { createContext, useContext, useState, useMemo, ReactNode, useEffect } from 'react';
+import { apiFetch, setToken, removeToken, getToken } from '@/lib/api/httpClient';
 
-/**
- * Interface for the authentication context.
- */
+// Define the user type based on backend response
+interface User {
+  id: number;
+  name: string;
+  email: string;
+}
+
 interface AuthContextType {
   isLoggedIn: boolean;
-  user: { name: string; email: string } | null;
-  login: (email: string) => void;
+  user: User | null;
+  login: (email: string, password: string) => Promise<void>;
+  register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
+  isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 /**
- * Mock Auth Provider for front-end readiness.
+ * Authentication Provider
+ * Handles session management, login, registration, and logout with backend API.
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
-  // Simulating authentication state. Default is logged out.
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [user, setUser] = useState<{ name: string; email: string } | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isReady, setIsReady] = useState(false);
 
   /**
-   * Mock login function. In a real app, this verifies credentials via API.
+   * Initial load: check if token exists locally.
+   * If yes, mark as authenticated and set placeholder user data.
+   * In a real app, you should verify token validity via /auth/me.
    */
-  const login = (email: string) => {
-    // Mock successful login
-    setIsLoggedIn(true);
-    setUser({ name: 'Jane Doe', email: email });
-    console.log('User logged in (Mock)');
+  useEffect(() => {
+    // Step 1: Retrieve stored token
+    const token = getToken();
+
+    if (token) {
+      // If token exists, assume a valid session for now
+      setIsLoggedIn(true);
+      setUser({ id: 999, name: 'Guest User', email: 'verified@user.com' });
+    }
+
+    // Step 2: Mark as finished loading after token check
+    setIsLoading(false);
+    setIsReady(true);
+  }, []);
+
+  /**
+   * Handles user login via backend API.
+   * On success, store the token and user info in local state.
+   */
+  const login = async (email: string, password: string) => {
+    setIsLoading(true);
+    try {
+      const data = await apiFetch('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      });
+
+      setToken(data.token);
+      setIsLoggedIn(true);
+      setUser(data.user);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   /**
-   * Mock logout function. Clears session/token in a real app.
+   * Handles new user registration via backend API.
+   * Stores token and user info on success.
+   */
+  const register = async (name: string, email: string, password: string) => {
+    setIsLoading(true);
+    try {
+      const data = await apiFetch('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({ name, email, password }),
+      });
+
+      setToken(data.token);
+      setIsLoggedIn(true);
+      setUser(data.user);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  /**
+   * Logs out the user by clearing token and local session state.
+   * Also attempts to notify backend for cleanup.
    */
   const logout = () => {
+    apiFetch('/auth/logout', { method: 'POST' }).catch((err) =>
+      console.error('Logout API failed:', err)
+    );
+
+    removeToken();
     setIsLoggedIn(false);
     setUser(null);
-    console.log('User logged out (Mock)');
   };
 
-  const value = useMemo(() => ({
-    isLoggedIn,
-    user,
-    login,
-    logout,
-  }), [isLoggedIn, user]);
+  // Memoize context value to prevent unnecessary re-renders
+  const value = useMemo(
+    () => ({
+      isLoggedIn,
+      user,
+      login,
+      register,
+      logout,
+      isLoading,
+      isReady,
+    }),
+    [isLoggedIn, user, isLoading, isReady]
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 /**
- * Hook to consume the authentication context.
+ * Hook for accessing the authentication context.
+ * Must be used within an AuthProvider.
  */
 export const useAuth = () => {
   const context = useContext(AuthContext);

@@ -26,12 +26,11 @@ const queryClient = new QueryClient({
 export function Providers({ children }: { children: React.ReactNode }) {
     return (
         <QueryClientProvider client={queryClient}>
-          <CartProvider>
-            {/* AuthProvider wraps everything that needs user status */}
-            <AuthProvider> 
-              {children}
-            </AuthProvider>
-          </CartProvider>
+          <AuthProvider> 
+        <CartProvider>
+          {children}
+        </CartProvider>
+      </AuthProvider>
         </QueryClientProvider>
       );
   }

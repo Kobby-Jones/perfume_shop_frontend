@@ -10,6 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { useCart } from '@/lib/hooks/useCart';
 import { useAuth } from '@/lib/hooks/useAuth'; 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'; 
+import { SearchCommand } from './SearchCommand';
 /**
  * Main navigation links for the application.
  */
@@ -31,7 +32,7 @@ export function Header() {
 
     const handleLogout = () => {
         logout();
-        router.push('/account/login'); // Redirect to login page after signing out
+        router.push('/account/auth/login'); // Redirect to login page after signing out
       };
 
   return (
@@ -87,9 +88,7 @@ export function Header() {
 
         {/* --- Utility Icons (Right) --- */}
         <div className="flex items-center space-x-2 sm:space-x-4">
-          <Button variant="ghost" size="icon" aria-label="Search">
-            <Search className="h-5 w-5" />
-          </Button>
+        <SearchCommand />
           {/* User/Auth Button: Dynamic Login or Dropdown Menu */}
           {isLoggedIn ? (
             <DropdownMenu>
@@ -122,7 +121,7 @@ export function Header() {
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <Link href="/account/login">
+            <Link href="/account/auth/login">
               <Button variant="ghost" size="icon" aria-label="Login or Register">
                 <User className="h-5 w-5" />
               </Button>

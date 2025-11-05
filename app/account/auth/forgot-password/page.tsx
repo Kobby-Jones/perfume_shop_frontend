@@ -20,7 +20,7 @@ export default function ForgotPasswordPage() {
       </div>
       <div className="mt-6 text-center">
         <Button variant="link" asChild>
-          <Link href="/account/login">Back to Login</Link>
+          <Link href="/account/auth/login">Back to Login</Link>
         </Button>
       </div>
     </AuthLayout>

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { CartItemCard } from '@/components/cart/CartItemCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { AuthGuard } from '@/components/layout/AuthGuard'; // Import AuthGuard
 
 /**
  * Main Shopping Cart Page component.
@@ -32,6 +33,7 @@ export default function CartPage() {
   // --- Empty Cart State ---
   if (cartIsEmpty && !isLoading) {
     return (
+      <AuthGuard>
       <div className="container py-20 text-center">
         <XCircle className="w-16 h-16 text-primary/80 mx-auto mb-6" />
         <h1 className="text-3xl font-bold mb-2">Your Cart is Empty</h1>
@@ -43,6 +45,7 @@ export default function CartPage() {
           </Button>
         </Link>
       </div>
+      </AuthGuard>
     );
   }
   
