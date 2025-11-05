@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api/httpClient';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { toast } from 'sonner'; // ✅ Using Sonner instead of useToast
+import { toast } from 'sonner'; 
 import { Product } from '@/lib/data/mock-products';
 
 // --- API Response & Type Definitions ---

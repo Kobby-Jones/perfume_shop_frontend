@@ -9,7 +9,9 @@ import { ShoppingCart, Heart } from 'lucide-react';
 import { Product } from '@/lib/data/mock-products';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { useCart } from '@/lib/hooks/useCart'; // Import the cart hook
+import { useCart } from '@/lib/hooks/useCart';
+import { useWishlist } from '@/lib/hooks/useWishlist';
+import { cn } from '@/lib/utils'
 
 interface ProductCardProps {
   product: Product;
@@ -21,7 +23,9 @@ interface ProductCardProps {
  */
 export function ProductCard({ product }: ProductCardProps) {
   const isOutOfStock = product.availableStock <= 0;
-  const { addToCart } = useCart(); // Use the cart hook
+  const { addToCart } = useCart();
+  const { toggleWishlist, isProductInWishlist } = useWishlist();
+  const isInWishlist = isProductInWishlist(product.id);
 
   const formattedPrice = new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -55,14 +59,19 @@ export function ProductCard({ product }: ProductCardProps) {
           
           {/* Wishlist Button - Floating on image */}
           <button
-            onClick={(e) => {
-              e.preventDefault();
-              console.log('Added to wishlist');
-            }}
+            onClick={(e) => { 
+              e.preventDefault(); 
+              e.stopPropagation(); // Prevent card link navigation
+              toggleWishlist(product.id); 
+          }}
             className="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-white z-10"
             aria-label="Add to Wishlist"
           >
-            <Heart className="h-4 w-4 text-gray-600 hover:text-red-500 transition-colors" />
+            <Heart className={cn(
+                            "h-5 w-5 transition-colors fill-transparent", 
+                            // Conditional styling for when the item is in the list
+                            isInWishlist ? "fill-primary text-primary" : "text-foreground/50 hover:text-primary"
+                        )} />
           </button>
 
           {isOutOfStock && (

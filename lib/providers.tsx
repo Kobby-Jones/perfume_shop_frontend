@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import { CartProvider } from './hooks/useCart';
 import { AuthProvider } from './hooks/useAuth';
+import { WishlistProvider } from './hooks/useWishlist';
 
 // Create a client instance outside of the component to prevent re-instantiation on every render.
 // We disable window focus refetching to enhance UX and performance by default.
@@ -25,12 +26,14 @@ const queryClient = new QueryClient({
  */
 export function Providers({ children }: { children: React.ReactNode }) {
     return (
-        <QueryClientProvider client={queryClient}>
-          <AuthProvider> 
+      <QueryClientProvider client={queryClient}>
+      <AuthProvider> 
         <CartProvider>
-          {children}
+            <WishlistProvider> 
+                {children}
+            </WishlistProvider>
         </CartProvider>
       </AuthProvider>
-        </QueryClientProvider>
+    </QueryClientProvider>
       );
   }
