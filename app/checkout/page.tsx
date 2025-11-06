@@ -8,28 +8,23 @@ import {
   MapPin,
   CreditCard,
   CheckCircle,
-  Loader2,
   Frown,
   ShoppingBag,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-
 import { useCart } from '@/lib/hooks/useCart';
 import { apiFetch } from '@/lib/api/httpClient';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
-import { Card, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { CheckoutSummaryCard } from '@/components/checkout/CheckoutSummaryCard';
 import { AddressStep } from '@/components/checkout/AddressStep';
 import { ShippingStep } from '@/components/checkout/ShippingStep';
 import { PaymentStep } from '@/components/checkout/PaymentStep';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AuthGuard } from '@/components/layout/AuthGuard'; // ✅ Import AuthGuard
+import { AuthGuard } from '@/components/layout/AuthGuard';
 
-// Define checkout steps
 const checkoutSteps = [
   { id: 1, name: 'Shipping Address', icon: MapPin, component: AddressStep },
   { id: 2, name: 'Shipping Options', icon: Truck, component: ShippingStep },
@@ -41,13 +36,17 @@ interface CheckoutData {
   shippingOption: 'standard' | 'express';
 }
 
-/**
- * Protected Checkout Page
- * Wrapped with AuthGuard to restrict access to logged-in users.
- */
+interface OrderCreationResponse {
+  orderId: number;
+  orderTotal: number;
+  orderTotalCents: number;
+  userEmail: string;
+  paymentReference: string;
+  message: string;
+}
+
 function CheckoutPageContent() {
-  const { cartDetails, cartTotal, isLoading } = useCart();
-  const router = useRouter();
+  const { cartDetails, totals, isLoading } = useCart();
   const queryClient = useQueryClient();
 
   const [currentStep, setCurrentStep] = useState(1);
@@ -55,39 +54,92 @@ function CheckoutPageContent() {
     address: null,
     shippingOption: 'standard',
   });
+  
+  // Store order info after creation
+  const [orderInfo, setOrderInfo] = useState<OrderCreationResponse | null>(null);
 
   const cartIsEmpty = cartDetails.length === 0;
+  const grandTotal = totals?.grandTotal || 0;
 
-  // --- Mutation Hook for Placing Order ---
-  const placeOrderMutation = useMutation({
-    mutationFn: (data: { shippingAddress: any; shippingOption: 'standard' | 'express' }) =>
-      apiFetch('/checkout/order', {
+  // --- Step 1: Create Order Mutation ---
+  const createOrderMutation = useMutation({
+    mutationFn: async () => {
+      console.log('Creating order with:', {
+        shippingAddress: checkoutData.address,
+        shippingOption: checkoutData.shippingOption,
+      });
+      
+      const response = await apiFetch('/checkout/order', {
         method: 'POST',
         body: JSON.stringify({
-          shippingAddress: data.shippingAddress,
-          shippingOption: data.shippingOption,
+          shippingAddress: checkoutData.address,
+          shippingOption: checkoutData.shippingOption,
         }),
-      }),
+      });
+      
+      console.log('Order created:', response);
+      return response as OrderCreationResponse;
+    },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['cart'] });
-      toast.success(`Order #${data.orderId} placed successfully! Redirecting to payment...`);
-      setCurrentStep(4);
+      console.log('Order creation successful:', data);
+      setOrderInfo(data);
+      toast.success('Order created! You can now proceed to payment.');
     },
     onError: (error: any) => {
-      toast.error(error.message || 'Checkout failed. Please try again.');
+      console.error('Order creation error:', error);
+      toast.error(error.message || 'Failed to create order. Please try again.');
     },
   });
 
-  // --- Loading State ---
+  // --- Step 2: Verify Payment Mutation ---
+  const verifyPaymentMutation = useMutation({
+    mutationFn: async (reference: string) => {
+      if (!orderInfo) throw new Error('No order information available');
+      
+      return apiFetch('/checkout/paystack-verify', {
+        method: 'POST',
+        body: JSON.stringify({
+          reference,
+          orderId: orderInfo.orderId,
+        }),
+      });
+    },
+    onSuccess: () => {
+      // Invalidate cart query to refresh the empty cart
+      queryClient.invalidateQueries({ queryKey: ['cart'] });
+      toast.success('Payment verified! Your order is confirmed.');
+      setCurrentStep(4); // Move to success step
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Payment verification failed. Please contact support.');
+    },
+  });
+
+  // Handler for payment step to call
+  const handlePaymentInitiation = () => {
+    createOrderMutation.mutate();
+  };
+
+  // Handler for successful Paystack payment
+  const handlePaymentSuccess = (reference: string) => {
+    verifyPaymentMutation.mutate(reference);
+  };
+
+  const CurrentStepComponent = checkoutSteps.find(
+    (step) => step.id === currentStep
+  )?.component;
+
+  const nextStepHandler = () => setCurrentStep((prev) => Math.min(prev + 1, 3));
+  const prevStepHandler = () => setCurrentStep((prev) => Math.max(prev - 1, 1));
+
   if (isLoading) {
     return (
       <div className="container py-20 text-center">
-        <Skeleton />
+        <Skeleton className="h-40 w-full" />
       </div>
     );
   }
 
-  // --- Empty Cart State ---
   if (cartIsEmpty && currentStep !== 4) {
     return (
       <div className="container py-20 text-center">
@@ -106,15 +158,19 @@ function CheckoutPageContent() {
     );
   }
 
-  // --- Order Confirmation Step ---
   if (currentStep === 4) {
     return (
       <div className="container py-20 text-center">
         <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-6" />
         <h1 className="text-3xl font-bold mb-2">Order Confirmed!</h1>
         <p className="text-lg text-foreground/70 mb-6">
-          Your payment was successful and your order is being processed.
+          Your payment was verified and your order is being processed.
         </p>
+        {orderInfo && (
+          <p className="text-sm text-foreground/60 mb-6">
+            Order #{orderInfo.orderId}
+          </p>
+        )}
         <Link href="/account/orders">
           <Button size="lg">View Order History</Button>
         </Link>
@@ -122,114 +178,37 @@ function CheckoutPageContent() {
     );
   }
 
-  const CurrentStepComponent = checkoutSteps.find(
-    (step) => step.id === currentStep
-  )?.component;
-
-  const handlePlaceOrder = () => {
-    if (!checkoutData.address) {
-      toast.error('Please complete your shipping address before placing an order.');
-      return;
-    }
-
-    placeOrderMutation.mutate({
-      shippingAddress: checkoutData.address,
-      shippingOption: checkoutData.shippingOption,
-    });
+  // Base props for all steps
+  const baseStepProps = {
+    data: checkoutData,
+    setData: setCheckoutData,
+    nextStep: nextStepHandler,
+    prevStep: prevStepHandler,
   };
+
+  // Payment-specific props
+  const paymentProps = currentStep === 3 ? {
+    orderInfo: orderInfo,
+    isCreatingOrder: createOrderMutation.isPending,
+    onInitiatePayment: handlePaymentInitiation,
+    onPaymentSuccess: handlePaymentSuccess,
+  } : {};
+
+  const ComponentToRender: any = CurrentStepComponent;
 
   return (
     <div className="container py-8 md:py-12">
       <h1 className="text-3xl font-bold mb-8">Secure Checkout</h1>
 
-      {/* Step Progress Tracker */}
-      <div className="flex justify-between items-center mb-10 text-sm md:text-base overflow-x-auto whitespace-nowrap">
-        {checkoutSteps.map((step, index) => {
-          const isActive = step.id === currentStep;
-          const isComplete = step.id < currentStep;
-
-          return (
-            <div key={step.id} className="flex items-center">
-              <div className="flex flex-col items-center">
-                <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold transition-colors duration-300 ${
-                    isComplete
-                      ? 'bg-primary text-primary-foreground'
-                      : isActive
-                      ? 'bg-accent text-accent-foreground'
-                      : 'bg-secondary text-foreground/70 border border-border'
-                  }`}
-                >
-                  {isComplete ? <CheckCircle className="w-4 h-4" /> : step.id}
-                </div>
-                <span
-                  className={`mt-1 text-xs md:text-sm ${
-                    isActive ? 'text-primary font-medium' : 'text-foreground/70'
-                  }`}
-                >
-                  {step.name}
-                </span>
-              </div>
-              {index < checkoutSteps.length - 1 && (
-                <div
-                  className={`h-0.5 w-12 mx-2 transition-colors duration-300 ${
-                    isComplete ? 'bg-primary' : 'bg-border'
-                  }`}
-                />
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Main Content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left Column: Steps */}
         <Card className="lg:col-span-2 p-6">
-          <CardTitle className="text-2xl mb-4">
-            {checkoutSteps.find((step) => step.id === currentStep)?.name}
-          </CardTitle>
-          <Separator className="mb-6" />
-
-          {CurrentStepComponent && (
-            <CurrentStepComponent
-              data={checkoutData}
-              setData={setCheckoutData}
-              nextStep={() => setCurrentStep((prev) => Math.min(prev + 1, 3))}
-              prevStep={() => setCurrentStep((prev) => Math.max(prev - 1, 1))}
-            />
-          )}
-
-          {/* Step 3: Review and Place Order */}
-          {currentStep === 3 && (
-            <div className="mt-8">
-              <h3 className="text-xl font-semibold mb-4">Review and Place Order</h3>
-              <p className="mb-6 text-foreground/70">
-                By clicking “Place Order,” you agree to our Terms & Conditions.
-              </p>
-
-              <Button
-                size="lg"
-                className="w-full text-lg h-12"
-                onClick={handlePlaceOrder}
-                disabled={placeOrderMutation.isPending}
-              >
-                {placeOrderMutation.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    Placing Order...
-                  </>
-                ) : (
-                  'Place Order (Mock Payment)'
-                )}
-              </Button>
-            </div>
+          {ComponentToRender && (
+            <ComponentToRender {...baseStepProps} {...paymentProps} />
           )}
         </Card>
 
-        {/* Right Column: Summary */}
         <CheckoutSummaryCard
-          cartTotal={cartTotal}
+          cartTotal={grandTotal}
           shippingOption={checkoutData.shippingOption}
         />
       </div>
@@ -237,7 +216,6 @@ function CheckoutPageContent() {
   );
 }
 
-// Wrap checkout content with AuthGuard
 export default function CheckoutPage() {
   return (
     <AuthGuard>
