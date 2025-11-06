@@ -1,6 +1,6 @@
 // lib/api/httpClient.ts
 
-const API_BASE_URL = 'http://localhost:4000/api';
+const API_BASE_URL = 'https://scentia-api.onrender.com/api';
 
 export function getToken(): string | null {
   if (typeof window !== 'undefined') {
