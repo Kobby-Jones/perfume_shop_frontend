@@ -50,9 +50,12 @@ export function LoginForm() {
     try {
       // Call login from Auth context (integrated with backend API)
       await login(data.email, data.password);
-
+      if (data.email === "admin@scentia.com") {
+        router.push('/admin');
+    } else {
+        router.push('/account');
+    }
       // Redirect on successful login
-      router.push('/account');
     } catch (err: any) {
       // Handle API or network errors
       setError(err.message || 'Login failed. Please check your credentials.');

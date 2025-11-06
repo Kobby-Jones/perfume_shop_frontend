@@ -64,14 +64,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       });
-
+      
       setToken(data.token);
       setIsLoggedIn(true);
-      setUser(data.user);
-    } finally {
+      setUser(data.user); 
       setIsLoading(false);
+
+      
+    } catch (error) {
+      setIsLoading(false);
+      throw error; 
     }
-  };
+};
 
   /**
    * Handles new user registration via backend API.
@@ -84,14 +88,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: 'POST',
         body: JSON.stringify({ name, email, password }),
       });
-
+      
       setToken(data.token);
       setIsLoggedIn(true);
-      setUser(data.user);
-    } finally {
+      
+      // CRITICAL FIX: Set the user data from the registration response
+      setUser(data.user); 
+      
       setIsLoading(false);
+    } catch (error) {
+      setIsLoading(false);
+      throw error;
     }
-  };
+};
 
   /**
    * Logs out the user by clearing token and local session state.

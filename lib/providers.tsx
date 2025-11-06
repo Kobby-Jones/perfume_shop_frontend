@@ -7,6 +7,7 @@ import React from 'react';
 import { CartProvider } from './hooks/useCart';
 import { AuthProvider } from './hooks/useAuth';
 import { WishlistProvider } from './hooks/useWishlist';
+import { GlobalAlertModal } from '@/components/shared/ModalAlert';
 
 // Create a client instance outside of the component to prevent re-instantiation on every render.
 // We disable window focus refetching to enhance UX and performance by default.
@@ -25,15 +26,18 @@ const queryClient = new QueryClient({
  * @param children - The child components.
  */
 export function Providers({ children }: { children: React.ReactNode }) {
-    return (
-      <QueryClientProvider client={queryClient}>
+  return (
+    <QueryClientProvider client={queryClient}>
       <AuthProvider> 
         <CartProvider>
-            <WishlistProvider> 
+          <WishlistProvider> 
+            {/* WRAP EVERYTHING with the Modal Alert system */}
+            <GlobalAlertModal> 
                 {children}
-            </WishlistProvider>
+            </GlobalAlertModal>
+          </WishlistProvider>
         </CartProvider>
       </AuthProvider>
     </QueryClientProvider>
-      );
-  }
+  );
+}
