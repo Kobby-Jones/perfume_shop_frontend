@@ -10,8 +10,8 @@ interface User {
   id: number;
   name: string;
   email: string;
+  createdAt?: string; // Add this optional property
 }
-
 interface AuthContextType {
   isLoggedIn: boolean;
   user: User | null;
