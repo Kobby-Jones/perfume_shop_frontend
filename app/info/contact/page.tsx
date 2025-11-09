@@ -97,9 +97,9 @@ export default function ContactPage() {
                   href="tel:+15551234567" 
                   className="text-sm text-primary hover:underline block"
                 >
-                  +1 (555) 123-4567
+                  +233 (555) 123-4567
                 </a>
-                <p className="text-xs text-muted-foreground">Mon - Fri, 9am - 5pm EST</p>
+                <p className="text-xs text-muted-foreground">Mon - Fri, 9am - 10pm GMT</p>
               </div>
             </CardContent>
           </Card>

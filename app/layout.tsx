@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { Providers } from "@/lib/providers";
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
+import { WhatsAppFloat } from "@/components/ui/WhatsAppFloat";
 import { cn } from "@/lib/utils";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
@@ -44,8 +45,11 @@ export default function RootLayout({
           </div>
         </Providers>
 
-        {/*  Sonner toaster should be placed outside the main layout */}
+        {/* Sonner toaster should be placed outside the main layout */}
         <Toaster richColors position="top-center" />
+        
+        {/* WhatsApp Float Button - Appears on all pages */}
+        <WhatsAppFloat />
       </body>
     </html>
   );
