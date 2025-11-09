@@ -4,7 +4,7 @@
 
 import { ReactNode, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Package, Users, Settings, LogOut, LayoutDashboard, ShoppingBag, BarChart, Menu, X } from 'lucide-react';
+import { Package, Users, Settings, LogOut, LayoutDashboard, ShoppingBag, BarChart, Menu, X, MessageSquare, Tag } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -15,10 +15,14 @@ import { Loader2 } from 'lucide-react';
 
 const adminNavLinks = [
   { href: '/admin', label: 'Dashboard Overview', icon: LayoutDashboard },
-  { href: '/admin/orders', label: 'Order Management', icon: ShoppingBag },
-  { href: '/admin/products', label: 'Product Catalog', icon: Package },
-  { href: '/admin/users', label: 'User Management', icon: Users },
-  { href: '/admin/reports', label: 'Sales Reports', icon: BarChart },
+  { href: '/admin/orders', label: 'Orders', icon: ShoppingBag },
+  { href: '/admin/products', label: 'Products', icon: Package },
+  { href: '/admin/customers', label: 'Customers', icon: Users },
+  { href: '/admin/inventory', label: 'Inventory', icon: Package },
+  { href: '/admin/reports', label: 'Analytics', icon: BarChart },
+  { href: '/admin/reviews', label: 'Reviews', icon: MessageSquare },
+  { href: '/admin/discounts', label: 'Discounts', icon: Tag },
+  { href: '/admin/settings', label: 'Settings', icon: Settings },
 ];
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
