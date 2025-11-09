@@ -27,18 +27,18 @@ const navLinks: NavLink[] = [
     name: 'Women', 
     href: '/shop?category=Women',
     featured: true,
-    subcategories: ['Floral', 'Oriental', 'Fresh', 'Woody']
+    subcategories: ['Floral', 'Fruity', 'Oriental', 'Fresh', 'Gourmand']
   },
   { 
     name: 'Men', 
     href: '/shop?category=Men',
     featured: true,
-    subcategories: ['Woody', 'Spicy', 'Fresh', 'Aromatic']
+    subcategories: ['Woody', 'Spicy', 'Fresh', 'Aromatic', 'Leather']
   },
   { 
     name: 'Unisex', 
     href: '/shop?category=Unisex',
-    subcategories: ['Citrus', 'Floral', 'Woody']
+    subcategories: ['Citrus', 'Aquatic', 'Amber', 'Musk']
   },
   { name: 'New Arrivals', href: '/shop?sort=newest', badge: 'New' },
   { name: 'Best Sellers', href: '/shop?sort=popular', badge: 'Hot' },
@@ -135,8 +135,8 @@ export function Header() {
                     <Link href="/info/contact" className="block px-4 py-2 text-sm text-gray-600 hover:text-primary">
                       Contact
                     </Link>
-                    <Link href="/info/shipping" className="block px-4 py-2 text-sm text-gray-600 hover:text-primary">
-                      Shipping & Returns
+                    <Link href="/info/faq" className="block px-4 py-2 text-sm text-gray-600 hover:text-primary">
+                      FAQ
                     </Link>
                   </div>
                 </div>
@@ -306,11 +306,11 @@ export function Header() {
               <Link href="/shop?discount=true" className="hover:text-primary transition-colors font-medium">
                 Sale
               </Link>
-              <Link href="/collections/luxury" className="hover:text-primary transition-colors font-medium">
-                Luxury Collection
+              <Link href="/shop?featured=true" className="hover:text-primary transition-colors font-medium">
+                Featured
               </Link>
-              <Link href="/info/gift-guide" className="hover:text-primary transition-colors font-medium">
-                Gift Guide
+              <Link href="/shop?category=Women" className="hover:text-primary transition-colors font-medium">
+                Women's Collection
               </Link>
             </div>
             <div className="flex items-center gap-6">
@@ -320,8 +320,8 @@ export function Header() {
               <Link href="/info/contact" className="hover:text-primary transition-colors">
                 Contact
               </Link>
-              <Link href="/info/help" className="hover:text-primary transition-colors">
-                Help
+              <Link href="/info/faq" className="hover:text-primary transition-colors">
+                FAQ
               </Link>
             </div>
           </div>
