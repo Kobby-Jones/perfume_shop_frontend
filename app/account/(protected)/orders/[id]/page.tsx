@@ -44,7 +44,7 @@ export default function OrderDetailPage() {
     });
 
     if (isLoading) {
-        return <div className="text-center py-10"><Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" /></div>;
+        return <AccountLayout><div className="text-center py-10"><Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" /></div></AccountLayout>;
     }
     
     if (isError || !order) {
@@ -129,6 +129,6 @@ export default function OrderDetailPage() {
                     <Button>Leave Feedback</Button>
                 )}
             </div>
-       </>
+        </>
     );
 }

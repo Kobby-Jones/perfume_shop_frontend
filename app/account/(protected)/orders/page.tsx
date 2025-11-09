@@ -12,6 +12,7 @@ export default function OrderHistoryPage() {
   // NOTE: In a complete project, there would also be /account/orders/[id]/page.tsx 
   // for the specific Order Detail Page.
   return (
+    
       <OrderHistoryList />
   );
 }
