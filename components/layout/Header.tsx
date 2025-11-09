@@ -2,143 +2,329 @@
 'use client';
 
 import Link from 'next/link';
-import { Menu, Search, User, ShoppingCart, LogOut } from 'lucide-react';
+import { Menu, Search, User, ShoppingCart, LogOut, Heart, Package, ChevronDown, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
 import { useCart } from '@/lib/hooks/useCart';
 import { useAuth } from '@/lib/hooks/useAuth'; 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'; 
 import { SearchCommand } from './SearchCommand';
-/**
- * Main navigation links for the application.
- */
-const navLinks = [
-  { name: 'Shop All', href: '/shop' },
-  { name: 'Women', href: '/shop?category=Women' },
-  { name: 'Men', href: '/shop?category=Men' },
-  { name: 'About Us', href: '/info/about' },
+
+// Define types for navigation links
+interface NavLink {
+  name: string;
+  href: string;
+  featured?: boolean;
+  subcategories?: string[];
+  badge?: string;
+}
+
+const navLinks: NavLink[] = [
+  { 
+    name: 'Women', 
+    href: '/shop?category=Women',
+    featured: true,
+    subcategories: ['Floral', 'Oriental', 'Fresh', 'Woody']
+  },
+  { 
+    name: 'Men', 
+    href: '/shop?category=Men',
+    featured: true,
+    subcategories: ['Woody', 'Spicy', 'Fresh', 'Aromatic']
+  },
+  { 
+    name: 'Unisex', 
+    href: '/shop?category=Unisex',
+    subcategories: ['Citrus', 'Floral', 'Woody']
+  },
+  { name: 'New Arrivals', href: '/shop?sort=newest', badge: 'New' },
+  { name: 'Best Sellers', href: '/shop?sort=popular', badge: 'Hot' },
 ];
 
-/**
- * Renders the main application header with navigation, logo, and utility icons.
- * The design is mobile-first, using a Sheet component for the main menu on small screens.
- */
 export function Header() {
-    const { totalItems } = useCart(); // Get the total item count
-    const { isLoggedIn, user, logout } = useAuth(); // Get auth state and actions
+    const { totalItems } = useCart();
+    const { isLoggedIn, user, logout } = useAuth();
     const router = useRouter();
 
     const handleLogout = () => {
         logout();
-        router.push('/account/auth/login'); // Redirect to login page after signing out
-      };
+        router.push('/account/auth/login');
+    };
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
-        {/* --- Mobile Menu Trigger (Left) --- */}
-        <div className="flex lg:hidden">
-          {/* Sheet component for the mobile sidebar navigation */}
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" aria-label="Open mobile menu">
-                <Menu className="h-6 w-6" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-[300px] sm:w-[400px]">
-              <div className="flex flex-col space-y-4 pt-6">
-                <p className="text-lg font-semibold text-primary">Perfume Shop</p>
-                <Separator />
-                {navLinks.map((link) => (
-                  <Link
-                    key={link.name}
-                    href={link.href}
-                    className="block py-2 text-lg font-medium hover:text-primary transition-colors"
-                  >
-                    {link.name}
-                  </Link>
-                ))}
-              </div>
-            </SheetContent>
-          </Sheet>
+    <header className="sticky top-0 z-50 w-full bg-white shadow-sm">
+      {/* Top Bar - Announcements/Promos */}
+      <div className="bg-gradient-to-r from-primary/90 to-primary text-white">
+        <div className="container flex h-9 items-center justify-center px-4 text-xs sm:text-sm">
+          <Sparkles className="w-3 h-3 mr-2 hidden sm:inline" />
+          <span className="font-medium">Free Shipping on Orders Over GHS 500 | Shop Now!</span>
         </div>
+      </div>
 
-        {/* --- Logo (Center) --- */}
-        <Link href="/" className="flex-shrink-0">
-          {/* Using a custom class for branding color and font */}
-          <h1 className="text-2xl font-serif font-bold tracking-widest text-primary">
-            Scentia
-          </h1>
-        </Link>
-
-        {/* --- Desktop Navigation (Hidden on Mobile) --- */}
-        <nav className="hidden lg:flex lg:gap-8">
-          {navLinks.map((link) => (
-            <Link
-              key={link.name}
-              href={link.href}
-              className="text-sm font-medium transition-colors hover:text-primary text-foreground/80"
-            >
-              {link.name}
-            </Link>
-          ))}
-        </nav>
-
-        {/* --- Utility Icons (Right) --- */}
-        <div className="flex items-center space-x-2 sm:space-x-4">
-        <SearchCommand />
-          {/* User/Auth Button: Dynamic Login or Dropdown Menu */}
-          {isLoggedIn ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label="User Account Menu">
-                  {/* Show initials or a custom avatar here in production */}
-                  <User className="h-5 w-5 text-primary" />
+      {/* Main Header */}
+      <div className="border-b border-gray-200">
+        <div className="container flex h-16 md:h-20 items-center justify-between px-4 sm:px-6 lg:px-8">
+          {/* Mobile Menu + Logo */}
+          <div className="flex items-center gap-3 lg:gap-6">
+            {/* Mobile Menu Trigger */}
+            <Sheet>
+              <SheetTrigger asChild className="lg:hidden">
+                <Button variant="ghost" size="icon" aria-label="Open menu" className="hover:bg-gray-100">
+                  <Menu className="h-5 w-5" />
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>Welcome, {user?.name.split(' ')[0] || 'User'}</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <Link href="/account">
-                    <DropdownMenuItem>Dashboard</DropdownMenuItem>
-                </Link>
-                <Link href="/account/orders">
-                    <DropdownMenuItem>Order History</DropdownMenuItem>
-                </Link>
-                <Link href="/account/settings">
-                    <DropdownMenuItem>Settings</DropdownMenuItem>
-                </Link>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem 
+              </SheetTrigger>
+              <SheetContent side="left" className="w-[300px] sm:w-[350px] overflow-y-auto">
+                <div className="flex flex-col space-y-6 pt-6">
+                  {/* Mobile Logo */}
+                  <div className="flex items-center">
+                    <h2 className="text-2xl font-serif font-bold tracking-widest text-primary">
+                      Scentia
+                    </h2>
+                  </div>
+                  
+                  <Separator />
+
+                  {/* Mobile Navigation */}
+                  <nav className="flex flex-col space-y-1">
+                    <Link href="/shop" className="px-4 py-3 rounded-lg text-base font-semibold hover:bg-gray-100 transition-colors">
+                      Shop All Fragrances
+                    </Link>
+                    
+                    <Separator className="my-2" />
+                    
+                    {navLinks.map((link) => (
+                      <div key={link.name}>
+                        <Link
+                          href={link.href}
+                          className="flex items-center justify-between px-4 py-3 rounded-lg text-base font-medium hover:bg-gray-100 transition-colors"
+                        >
+                          <span>{link.name}</span>
+                          {link.badge && (
+                            <Badge variant="destructive" className="ml-2 text-xs">
+                              {link.badge}
+                            </Badge>
+                          )}
+                        </Link>
+                        {link.subcategories && (
+                          <div className="ml-6 mt-1 space-y-1">
+                            {link.subcategories.map((sub) => (
+                              <Link
+                                key={sub}
+                                href={`${link.href}&subcategory=${sub}`}
+                                className="block px-4 py-2 text-sm text-gray-600 hover:text-primary transition-colors"
+                              >
+                                {sub}
+                              </Link>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </nav>
+
+                  <Separator />
+
+                  {/* Mobile Quick Links */}
+                  <div className="space-y-2">
+                    <Link href="/info/about" className="block px-4 py-2 text-sm text-gray-600 hover:text-primary">
+                      About Us
+                    </Link>
+                    <Link href="/info/contact" className="block px-4 py-2 text-sm text-gray-600 hover:text-primary">
+                      Contact
+                    </Link>
+                    <Link href="/info/shipping" className="block px-4 py-2 text-sm text-gray-600 hover:text-primary">
+                      Shipping & Returns
+                    </Link>
+                  </div>
+                </div>
+              </SheetContent>
+            </Sheet>
+
+            {/* Logo */}
+            <Link href="/" className="flex-shrink-0">
+              <h1 className="text-2xl md:text-3xl font-serif font-bold tracking-widest text-primary hover:text-primary/80 transition-colors">
+                Scentia
+              </h1>
+            </Link>
+          </div>
+
+          {/* Desktop Navigation - Center */}
+          <nav className="hidden lg:flex lg:items-center lg:gap-1 xl:gap-2">
+            {navLinks.map((link) => (
+              <div key={link.name} className="relative group">
+                {link.subcategories ? (
+                  // Dropdown for categories with subcategories
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        className="text-sm font-medium hover:text-primary hover:bg-gray-50 px-3 py-2"
+                      >
+                        {link.name}
+                        {link.featured && (
+                          <ChevronDown className="ml-1 h-3 w-3 opacity-50" />
+                        )}
+                        {link.badge && (
+                          <Badge variant="destructive" className="ml-2 text-xs py-0 px-1.5">
+                            {link.badge}
+                          </Badge>
+                        )}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-48">
+                      <DropdownMenuLabel>Shop {link.name}</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <Link href={link.href}>
+                        <DropdownMenuItem>All {link.name}</DropdownMenuItem>
+                      </Link>
+                      <DropdownMenuSeparator />
+                      {link.subcategories.map((sub) => (
+                        <Link key={sub} href={`${link.href}&subcategory=${sub}`}>
+                          <DropdownMenuItem>{sub}</DropdownMenuItem>
+                        </Link>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : (
+                  // Regular link
+                  <Link href={link.href}>
+                    <Button 
+                      variant="ghost" 
+                      className="text-sm font-medium hover:text-primary hover:bg-gray-50 px-3 py-2"
+                    >
+                      {link.name}
+                      {link.badge && (
+                        <Badge variant="destructive" className="ml-2 text-xs py-0 px-1.5">
+                          {link.badge}
+                        </Badge>
+                      )}
+                    </Button>
+                  </Link>
+                )}
+              </div>
+            ))}
+          </nav>
+
+          {/* Utility Icons - Right */}
+          <div className="flex items-center gap-1 sm:gap-2">
+            {/* Search */}
+            <SearchCommand />
+
+            {/* Wishlist - Hidden on small mobile */}
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              aria-label="Wishlist"
+              className="hidden sm:flex hover:bg-gray-100"
+            >
+              <Heart className="h-5 w-5" />
+            </Button>
+
+            {/* User Account */}
+            {isLoggedIn ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" aria-label="Account" className="hover:bg-gray-100">
+                    <User className="h-5 w-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>
+                    <div>
+                      <p className="font-semibold">Welcome back!</p>
+                      <p className="text-xs text-gray-500 font-normal">{user?.email}</p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <Link href="/account">
+                    <DropdownMenuItem>
+                      <User className="mr-2 h-4 w-4" />
+                      My Account
+                    </DropdownMenuItem>
+                  </Link>
+                  <Link href="/account/orders">
+                    <DropdownMenuItem>
+                      <Package className="mr-2 h-4 w-4" />
+                      Order History
+                    </DropdownMenuItem>
+                  </Link>
+                  <Link href="/account/wishlist">
+                    <DropdownMenuItem>
+                      <Heart className="mr-2 h-4 w-4" />
+                      Wishlist
+                    </DropdownMenuItem>
+                  </Link>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
                     onClick={handleLogout} 
-                    className="text-red-500 cursor-pointer"
-                >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>Log Out</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : (
-            <Link href="/account/auth/login">
-              <Button variant="ghost" size="icon" aria-label="Login or Register">
-                <User className="h-5 w-5" />
+                    className="text-red-500 cursor-pointer focus:text-red-600"
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Sign Out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Link href="/account/auth/login">
+                <Button variant="ghost" size="icon" aria-label="Sign In" className="hover:bg-gray-100">
+                  <User className="h-5 w-5" />
+                </Button>
+              </Link>
+            )}
+
+            {/* Shopping Cart */}
+            <Link href="/cart">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="relative hover:bg-gray-100" 
+                aria-label={`Shopping cart with ${totalItems} items`}
+              >
+                <ShoppingCart className="h-5 w-5" />
+                {totalItems > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-white shadow-md">
+                    {totalItems > 9 ? '9+' : totalItems}
+                  </span>
+                )}
               </Button>
             </Link>
-          )}
-          <Link href="/cart">
-            <Button variant="ghost" size="icon" className="relative" aria-label="Shopping Cart">
-              <ShoppingCart className="h-5 w-5" />
-              {/* Dynamic Cart Count Indicator */}
-              {totalItems > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-                  {/* Display count, limiting to 9+ for small badge size */}
-                  {totalItems > 9 ? '9+' : totalItems} 
-                </span>
-              )}
-            </Button>
-          </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Secondary Navigation Bar - Desktop Only */}
+      <div className="hidden lg:block border-b border-gray-100 bg-gray-50/50">
+        <div className="container px-4 sm:px-6 lg:px-8">
+          <div className="flex h-10 items-center justify-between text-xs text-gray-600">
+            <div className="flex items-center gap-6">
+              <Link href="/shop?sort=newest" className="hover:text-primary transition-colors font-medium">
+                New Arrivals
+              </Link>
+              <Link href="/shop?discount=true" className="hover:text-primary transition-colors font-medium">
+                Sale
+              </Link>
+              <Link href="/collections/luxury" className="hover:text-primary transition-colors font-medium">
+                Luxury Collection
+              </Link>
+              <Link href="/info/gift-guide" className="hover:text-primary transition-colors font-medium">
+                Gift Guide
+              </Link>
+            </div>
+            <div className="flex items-center gap-6">
+              <Link href="/info/about" className="hover:text-primary transition-colors">
+                About
+              </Link>
+              <Link href="/info/contact" className="hover:text-primary transition-colors">
+                Contact
+              </Link>
+              <Link href="/info/help" className="hover:text-primary transition-colors">
+                Help
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
     </header>
