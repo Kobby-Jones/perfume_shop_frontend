@@ -96,12 +96,6 @@ export default function AccountDashboardPage() {
   const userEmail = user?.email || '';
   const memberSince = user?.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'October 2023';
 
-  const quickActions = [
-    { icon: ShoppingBag, label: 'Browse Shop', href: '/shop', color: 'text-blue-600', bg: 'bg-blue-50' },
-    { icon: Package, label: 'My Orders', href: '/account/orders', color: 'text-purple-600', bg: 'bg-purple-50' },
-    { icon: Heart, label: 'Wishlist', href: '/account/wishlist', color: 'text-red-600', bg: 'bg-red-50' },
-    { icon: MapPin, label: 'Addresses', href: '/account/addresses', color: 'text-green-600', bg: 'bg-green-50' },
-  ];
 
   const statusColors: Record<string, string> = {
     Delivered: 'bg-green-100 text-green-800 border-green-200',
@@ -188,34 +182,6 @@ export default function AccountDashboardPage() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Quick Actions */}
-      <Card className="mb-8 overflow-hidden">
-        <CardHeader className="bg-gradient-to-r from-primary/10 to-primary/5">
-          <CardTitle className="text-lg">Quick Actions</CardTitle>
-          <CardDescription>Navigate to your favorite sections</CardDescription>
-        </CardHeader>
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {quickActions.map((action, index) => {
-              const IconComponent = action.icon;
-              return (
-                <Link key={index} href={action.href}>
-                  <Button
-                    variant="ghost"
-                    className="h-auto py-6 flex flex-col items-center gap-2 hover:bg-accent w-full group"
-                  >
-                    <div className={`p-3 rounded-full ${action.bg} group-hover:scale-110 transition-transform`}>
-                      <IconComponent className={`h-6 w-6 ${action.color}`} />
-                    </div>
-                    <span className="text-sm font-medium">{action.label}</span>
-                  </Button>
-                </Link>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Account Info */}
