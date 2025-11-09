@@ -1,14 +1,13 @@
+// app/admin/reports/page.tsx
+
 'use client';
 
 import { BarChart, LineChart, PieChart, Pie, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import { BarChart as BarChartIcon, DollarSign, Users, RefreshCw } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
-import { apiFetch } from '@/lib/api/httpClient';
 import { Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
-// Mock data structures matching GHS currency and common e-commerce stats
 const mockSalesData = [
   { month: 'Oct', revenue: 4500, orders: 120 },
   { month: 'Nov', revenue: 6200, orders: 180 },
@@ -18,18 +17,21 @@ const mockSalesData = [
 ];
 
 const mockCategoryData = [
-  { name: 'Women', value: 4000, color: '#DB2777' }, // Pink
-  { name: 'Men', value: 3000, color: '#3B82F6' }, // Blue
-  { name: 'Unisex', value: 2500, color: '#F59E0B' }, // Amber
+  { name: 'Women', value: 4000, color: '#DB2777' },
+  { name: 'Men', value: 3000, color: '#3B82F6' },
+  { name: 'Unisex', value: 2500, color: '#F59E0B' },
 ];
 
-// Helper function to format currency
-const formatGHS = (amount: number, p0?: number) => 
-    new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS' }).format(amount);
+const formatGHS = (amount: number, decimals?: number) => {
+  const formatter = new Intl.NumberFormat('en-GH', { 
+    style: 'currency', 
+    currency: 'GHS',
+    minimumFractionDigits: decimals ?? 2,
+    maximumFractionDigits: decimals ?? 2
+  });
+  return formatter.format(amount);
+};
 
-/**
- * Custom Tooltip for Recharts to show GHS currency.
- */
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     const value = payload[0].value;
@@ -44,59 +46,86 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-/**
- * Admin Sales and Analytics Reports Dashboard.
- * Integrates Recharts for professional data visualization.
- */
 export default function AdminReportsPage() {
-    // In a production app, you would fetch all mock data here using a single hook/query
-    // const { data, isLoading } = useQuery(...)
-
-    const isLoading = false; // Mock loading state
+    const isLoading = false;
 
     if (isLoading) {
-        return <Loader2 className="w-8 h-8 animate-spin text-primary" />;
+        return (
+          <div className="flex justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          </div>
+        );
     }
     
     return (
-        <div className="space-y-8">
-            <h1 className="text-3xl font-bold flex items-center">
-                <BarChartIcon className="w-8 h-8 mr-3" /> Sales & Analytics Reports
+        <div className="space-y-4 md:space-y-8">
+            <h1 className="text-2xl md:text-3xl font-bold flex items-center">
+                <BarChartIcon className="w-6 h-6 md:w-8 md:h-8 mr-2 md:mr-3" /> 
+                Sales & Analytics
             </h1>
 
-            {/* 1. Key Metrics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Key Metrics Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                 <Card className="shadow-lg">
-                    <CardHeader><CardTitle className="text-lg">Total Revenue (Last 6 Months)</CardTitle></CardHeader>
-                    <CardContent className="text-4xl font-extrabold text-green-600">{formatGHS(35000)}</CardContent>
-                </Card>
-                 <Card className="shadow-lg">
-                    <CardHeader><CardTitle className="text-lg">Avg. Order Value</CardTitle></CardHeader>
-                    <CardContent className="text-4xl font-extrabold text-primary">{formatGHS(135.50)}</CardContent>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm md:text-lg">Total Revenue (6M)</CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-2xl md:text-4xl font-extrabold text-green-600">
+                      {formatGHS(35000, 0)}
+                    </CardContent>
                 </Card>
                 <Card className="shadow-lg">
-                    <CardHeader><CardTitle className="text-lg">New Customer Count</CardTitle></CardHeader>
-                    <CardContent className="text-4xl font-extrabold flex items-center text-blue-600">
-                        280 <Users className="w-8 h-8 ml-3" />
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm md:text-lg">Avg. Order Value</CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-2xl md:text-4xl font-extrabold text-primary">
+                      {formatGHS(135.50)}
+                    </CardContent>
+                </Card>
+                <Card className="shadow-lg">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm md:text-lg">New Customers</CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-2xl md:text-4xl font-extrabold flex items-center text-blue-600">
+                        280 <Users className="w-6 h-6 md:w-8 md:h-8 ml-2 md:ml-3" />
                     </CardContent>
                 </Card>
             </div>
 
-            {/* 2. Monthly Revenue Trend (Line/Bar Chart) */}
+            {/* Monthly Revenue Chart */}
             <Card className="shadow-lg">
                 <CardHeader className="flex flex-row justify-between items-center">
-                    <CardTitle className="text-xl">Monthly Revenue & Order Volume</CardTitle>
-                    <Button variant="outline" size="sm"><RefreshCw className="w-4 h-4 mr-2"/> Update Data</Button>
+                    <CardTitle className="text-base md:text-xl">Monthly Revenue & Orders</CardTitle>
+                    <Button variant="outline" size="sm" className="text-xs md:text-sm">
+                      <RefreshCw className="w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2"/> Update
+                    </Button>
                 </CardHeader>
-                <CardContent className="h-96">
+                <CardContent className="h-64 md:h-96">
                     <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={mockSalesData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                        <BarChart 
+                          data={mockSalesData} 
+                          margin={{ top: 10, right: 10, left: -10, bottom: 5 }}
+                        >
                             <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                            <XAxis dataKey="month" />
-                            <YAxis yAxisId="left" orientation="left" stroke="#8884d8" tickFormatter={val => formatGHS(val, 0)} />
-                            <YAxis yAxisId="right" orientation="right" stroke="#82ca9d" />
+                            <XAxis 
+                              dataKey="month" 
+                              tick={{ fontSize: 12 }}
+                            />
+                            <YAxis 
+                              yAxisId="left" 
+                              orientation="left" 
+                              stroke="#8884d8" 
+                              tickFormatter={val => formatGHS(val, 0)}
+                              tick={{ fontSize: 11 }}
+                            />
+                            <YAxis 
+                              yAxisId="right" 
+                              orientation="right" 
+                              stroke="#82ca9d"
+                              tick={{ fontSize: 11 }}
+                            />
                             <Tooltip content={<CustomTooltip />} />
-                            <Legend />
+                            <Legend wrapperStyle={{ fontSize: '12px' }} />
                             <Bar yAxisId="left" dataKey="revenue" name="Revenue" fill="#DB2777" />
                             <Bar yAxisId="right" dataKey="orders" name="Orders" fill="#5EEAD4" />
                         </BarChart>
@@ -104,10 +133,12 @@ export default function AdminReportsPage() {
                 </CardContent>
             </Card>
 
-            {/* 3. Sales By Category (Pie Chart) */}
+            {/* Sales By Category Pie Chart */}
             <Card className="shadow-lg">
-                <CardHeader><CardTitle className="text-xl">Sales Distribution by Category</CardTitle></CardHeader>
-                <CardContent className="h-96">
+                <CardHeader>
+                  <CardTitle className="text-base md:text-xl">Sales by Category</CardTitle>
+                </CardHeader>
+                <CardContent className="h-64 md:h-96">
                     <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
                             <Pie
@@ -116,16 +147,16 @@ export default function AdminReportsPage() {
                                 nameKey="name"
                                 cx="50%"
                                 cy="50%"
-                                outerRadius={120}
+                                outerRadius="70%"
                                 fill="#8884d8"
-                                label
+                                label={(entry) => entry.name}
                             >
                                 {mockCategoryData.map((entry, index) => (
                                     <Cell key={`cell-${index}`} fill={entry.color} />
                                 ))}
                             </Pie>
                             <Tooltip content={<CustomTooltip />} />
-                            <Legend />
+                            <Legend wrapperStyle={{ fontSize: '12px' }} />
                         </PieChart>
                     </ResponsiveContainer>
                 </CardContent>
