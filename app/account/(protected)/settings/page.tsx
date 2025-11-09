@@ -12,7 +12,7 @@ import { Separator } from '@/components/ui/separator';
  */
 export default function AccountSettingsPage() {
   return (
-    <AccountLayout>
+    <>
       <h2 className="text-2xl font-bold mb-6">Profile Information</h2>
       <UpdateProfileForm />
 
@@ -20,6 +20,6 @@ export default function AccountSettingsPage() {
 
       <h2 className="text-2xl font-bold mb-6">Security Settings</h2>
       <ChangePasswordForm />
-    </AccountLayout>
+    </>
   );
 }

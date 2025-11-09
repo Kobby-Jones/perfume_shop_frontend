@@ -16,16 +16,14 @@ export default function WishlistPage() {
 
   if (isLoading) {
     return (
-      <AccountLayout>
-        <div className="flex justify-center py-10">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        </div>
-      </AccountLayout>
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
     );
   }
 
   return (
-    <AccountLayout>
+    <>
       <h2 className="text-2xl font-bold mb-6 flex items-center">
         Your Wishlist <span className="text-foreground/60 ml-3 text-xl">({itemCount})</span>
       </h2>
@@ -44,6 +42,6 @@ export default function WishlistPage() {
           ))}
         </div>
       )}
-    </AccountLayout>
+    </>
   );
 }

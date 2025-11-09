@@ -44,18 +44,16 @@ export default function OrderDetailPage() {
     });
 
     if (isLoading) {
-        return <AccountLayout><div className="text-center py-10"><Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" /></div></AccountLayout>;
+        return <div className="text-center py-10"><Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" /></div>;
     }
     
     if (isError || !order) {
         return (
-            <AccountLayout>
                 <div className="text-center py-10 text-red-600">
                     <Frown className="w-8 h-8 mx-auto mb-3" />
                     <p className="text-xl font-semibold">Order #{orderId} Not Found</p>
                     <p className="text-foreground/70">The order ID is invalid or access is denied.</p>
                 </div>
-            </AccountLayout>
         );
     }
     
@@ -63,7 +61,7 @@ export default function OrderDetailPage() {
     const statusColor = order.status === 'Delivered' ? 'text-green-600' : order.status === 'Cancelled' ? 'text-red-600' : 'text-accent';
 
     return (
-        <AccountLayout>
+        <>
             <h2 className="text-3xl font-bold mb-6">Order #{order.id} Details</h2>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -131,6 +129,6 @@ export default function OrderDetailPage() {
                     <Button>Leave Feedback</Button>
                 )}
             </div>
-        </AccountLayout>
+       </>
     );
 }

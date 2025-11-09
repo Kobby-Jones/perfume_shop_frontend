@@ -14,9 +14,8 @@ export default function ProtectedAccountLayout({ children }: { children: ReactNo
   return (
     <AuthGuard>
         {/* We can now safely wrap the protected content with the visual AccountLayout */}
-        <AccountLayout>
+
             {children}
-        </AccountLayout>
     </AuthGuard>
   );
 }
