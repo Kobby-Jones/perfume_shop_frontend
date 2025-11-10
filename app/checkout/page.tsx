@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Truck,
   MapPin,
@@ -34,6 +34,9 @@ const checkoutSteps = [
 interface CheckoutData {
   address: any | null;
   shippingOption: 'standard' | 'express';
+  // Include discount info
+  discountCode: string | null;
+  discountValue: number; // Fixed amount deducted
 }
 
 interface OrderCreationResponse {
@@ -42,46 +45,98 @@ interface OrderCreationResponse {
   orderTotalCents: number;
   userEmail: string;
   paymentReference: string;
-  message: string;
 }
 
 function CheckoutPageContent() {
-  const { cartDetails, totals, isLoading } = useCart();
+  const { cartDetails, totals, isLoading: isCartLoading, cartTotal, refetchCart } = useCart();
   const queryClient = useQueryClient();
+
+  // Calculate taxes and shipping based on selected option (live data from totals)
+  const calculateFinalTotals = (shippingOption: 'standard' | 'express') => {
+      // NOTE: We rely on the backend totals based on standard shipping for the initial load.
+      // For accurate live calculation, we would need a dedicated /cart/calculate endpoint that accepts shippingOption/discount.
+      // Since we don't have that dedicated endpoint, we'll manually recalculate based on the cart subtotal and fixed rates, 
+      // matching the cart controller logic (if deployed correctly).
+      
+      const subtotal = totals?.subtotal || 0;
+      const FREE_SHIPPING_THRESHOLD = 100.00;
+      const TAX_RATE = 0.08;
+      const SHIPPING_STANDARD_COST = 15.00;
+      const SHIPPING_EXPRESS_COST = 25.00;
+
+      let shippingCost: number;
+      if (shippingOption === 'express') {
+          shippingCost = SHIPPING_EXPRESS_COST;
+      } else {
+          shippingCost = subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_STANDARD_COST;
+      }
+
+      const rawTotal = subtotal + shippingCost;
+      const tax = rawTotal * TAX_RATE;
+      const grandTotal = rawTotal + tax;
+
+      return { subtotal, shippingCost, tax, grandTotal };
+  };
+  
+  const initialTotals = calculateFinalTotals('standard');
 
   const [currentStep, setCurrentStep] = useState(1);
   const [checkoutData, setCheckoutData] = useState<CheckoutData>({
     address: null,
     shippingOption: 'standard',
+    discountCode: null,
+    discountValue: 0,
   });
+  
+  // Update totals dynamically when shipping option changes
+  const { subtotal, shippingCost, tax, grandTotal } = useMemo(() => {
+      return calculateFinalTotals(checkoutData.shippingOption);
+  }, [checkoutData.shippingOption, cartTotal]);
+
+  // Handle discount application in summary card
+  const handleDiscountApplied = (discount: any | null) => {
+    if (discount) {
+        setCheckoutData(prev => ({
+            ...prev,
+            discountCode: discount.code,
+            discountValue: discount.value,
+        }));
+    } else {
+        setCheckoutData(prev => ({
+            ...prev,
+            discountCode: null,
+            discountValue: 0,
+        }));
+    }
+  };
+
   
   // Store order info after creation
   const [orderInfo, setOrderInfo] = useState<OrderCreationResponse | null>(null);
 
   const cartIsEmpty = cartDetails.length === 0;
-  const grandTotal = totals?.grandTotal || 0;
 
-  // --- Step 1: Create Order Mutation ---
+  // --- Step 1: Create Order Mutation (Live) ---
   const createOrderMutation = useMutation({
     mutationFn: async () => {
-      console.log('Creating order with:', {
+      if (!checkoutData.address || !checkoutData.shippingOption) {
+          throw new Error('Missing address or shipping details.');
+      }
+      
+      const payload = {
         shippingAddress: checkoutData.address,
         shippingOption: checkoutData.shippingOption,
-      });
+        discountCode: checkoutData.discountCode, // Pass discount code to backend
+      };
       
       const response = await apiFetch('/checkout/order', {
         method: 'POST',
-        body: JSON.stringify({
-          shippingAddress: checkoutData.address,
-          shippingOption: checkoutData.shippingOption,
-        }),
+        body: JSON.stringify(payload),
       });
       
-      console.log('Order created:', response);
       return response as OrderCreationResponse;
     },
     onSuccess: (data) => {
-      console.log('Order creation successful:', data);
       setOrderInfo(data);
       toast.success('Order created! You can now proceed to payment.');
     },
@@ -91,7 +146,7 @@ function CheckoutPageContent() {
     },
   });
 
-  // --- Step 2: Verify Payment Mutation ---
+  // --- Step 2: Verify Payment Mutation (Live) ---
   const verifyPaymentMutation = useMutation({
     mutationFn: async (reference: string) => {
       if (!orderInfo) throw new Error('No order information available');
@@ -107,6 +162,11 @@ function CheckoutPageContent() {
     onSuccess: () => {
       // Invalidate cart query to refresh the empty cart
       queryClient.invalidateQueries({ queryKey: ['cart'] });
+      // Clear address cache (as it might be used during checkout, though less critical)
+      queryClient.invalidateQueries({ queryKey: ['userAddresses'] }); 
+      // Update cart state locally immediately after successful clearance, then move to success step
+      refetchCart();
+      
       toast.success('Payment verified! Your order is confirmed.');
       setCurrentStep(4); // Move to success step
     },
@@ -132,7 +192,7 @@ function CheckoutPageContent() {
   const nextStepHandler = () => setCurrentStep((prev) => Math.min(prev + 1, 3));
   const prevStepHandler = () => setCurrentStep((prev) => Math.max(prev - 1, 1));
 
-  if (isLoading) {
+  if (isCartLoading) {
     return (
       <div className="container py-20 text-center">
         <Skeleton className="h-40 w-full" />
@@ -168,7 +228,7 @@ function CheckoutPageContent() {
         </p>
         {orderInfo && (
           <p className="text-sm text-foreground/60 mb-6">
-            Order #{orderInfo.orderId}
+            Order **#{orderInfo.orderId}**
           </p>
         )}
         <Link href="/account/orders">
@@ -177,6 +237,9 @@ function CheckoutPageContent() {
       </div>
     );
   }
+
+  // Calculate total AFTER discount for the final order creation
+  const finalOrderTotal = grandTotal - checkoutData.discountValue;
 
   // Base props for all steps
   const baseStepProps = {
@@ -192,6 +255,8 @@ function CheckoutPageContent() {
     isCreatingOrder: createOrderMutation.isPending,
     onInitiatePayment: handlePaymentInitiation,
     onPaymentSuccess: handlePaymentSuccess,
+    // Pass the final total after discount to the Paystack button
+    orderTotalCents: Math.round(finalOrderTotal * 100), 
   } : {};
 
   const ComponentToRender: any = CurrentStepComponent;
@@ -208,8 +273,12 @@ function CheckoutPageContent() {
         </Card>
 
         <CheckoutSummaryCard
-          cartTotal={grandTotal}
+          cartSubtotal={subtotal}
+          shippingCost={shippingCost}
+          tax={tax}
+          grandTotal={grandTotal}
           shippingOption={checkoutData.shippingOption}
+          onDiscountApplied={handleDiscountApplied}
         />
       </div>
     </div>

@@ -17,34 +17,38 @@ const adminNavLinks = [
   { href: '/admin', label: 'Dashboard Overview', icon: LayoutDashboard },
   { href: '/admin/orders', label: 'Orders', icon: ShoppingBag },
   { href: '/admin/products', label: 'Products', icon: Package },
-  { href: '/admin/customers', label: 'Customers', icon: Users },
+  { href: '/admin/users', label: 'Customers', icon: Users },
   { href: '/admin/inventory', label: 'Inventory', icon: Package },
   { href: '/admin/reports', label: 'Analytics', icon: BarChart },
   { href: '/admin/reviews', label: 'Reviews', icon: MessageSquare },
   { href: '/admin/discounts', label: 'Discounts', icon: Tag },
-  { href: '/admin/settings', label: 'Settings', icon: Settings },
+  // { href: '/admin/settings', label: 'Settings', icon: Settings }, // Settings page is not a required feature yet
 ];
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
-  const { isLoggedIn, user, logout } = useAuth();
+  const { isLoggedIn, user, logout, isLoading: isAuthLoading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const { alert } = useAlert();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
-  const isAdminUser = user?.email === "admin@scentia.com";
+  // SECURE CHECK: Rely only on the role returned by the verified token
+  const isAdminUser = user?.role === "admin";
 
   useEffect(() => {
-    if (!isLoggedIn) {
-      router.push('/account/auth/login');
-      return;
+    // Wait until the initial auth check is complete
+    if (!isAuthLoading) {
+        if (!isLoggedIn) {
+            router.push('/account/auth/login');
+            return;
+        }
+        
+        if (isLoggedIn && !isAdminUser) {
+            alert({ title: "Access Denied", message: "Administrator privileges required.", variant: 'error' });
+            router.push('/account'); // Redirect non-admins to their dashboard
+        }
     }
-    
-    if (isLoggedIn && !isAdminUser) {
-      alert({ title: "Access Denied", message: "Administrator privileges required.", variant: 'error' });
-      router.push('/account/dashboard');
-    }
-  }, [isLoggedIn, user?.email, router, alert]);
+  }, [isLoggedIn, isAdminUser, isAuthLoading, router, alert]);
 
   // Close sidebar when route changes (mobile)
   useEffect(() => {
@@ -57,12 +61,19 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     alert({ title: "Signed Out", message: "You have securely logged out of the Admin Dashboard.", variant: 'info' });
   };
   
-  if (!isLoggedIn || !isAdminUser) {
+  // Show loading indicator while authentication is pending
+  if (isAuthLoading || (isLoggedIn && !isAdminUser)) {
     return (
       <div className="flex justify-center items-center h-screen bg-gray-50">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
+  }
+
+  if (!isAdminUser) {
+      // If we land here, it means redirection failed or a quick flicker. 
+      // Null return lets Next.js handle the redirect while waiting.
+      return null;
   }
 
   return (
@@ -102,7 +113,8 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         
         <nav className="flex flex-col space-y-1 flex-grow overflow-y-auto">
           {adminNavLinks.map((link) => {
-            const isActive = pathname === link.href || (link.href !== '/admin' && pathname.startsWith(link.href));
+            // Updated active link logic for better path matching
+            const isActive = pathname === link.href || (link.href !== '/admin' && pathname.startsWith(link.href) && pathname.charAt(link.href.length) === '/');
             const Icon = link.icon;
             return (
               <Link

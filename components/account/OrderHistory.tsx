@@ -3,21 +3,22 @@
 'use client';
 
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query'; // Import useQuery
+import { useQuery } from '@tanstack/react-query'; 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Truck, CheckCircle, Clock, Loader2, Frown } from 'lucide-react';
+import { Truck, CheckCircle, Clock, Loader2, Frown, XCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { apiFetch } from '@/lib/api/httpClient'; // Import API client
-import { ProductGridSkeleton } from '../product/ProductListingSkeletons'; // Reusing skeleton
+import { apiFetch } from '@/lib/api/httpClient'; 
+import { ProductGridSkeleton } from '../product/ProductListingSkeletons'; 
+import { useAuth } from '@/lib/hooks/useAuth';
 
 /**
  * Interface for the Order Summary data expected from the backend
  */
 interface OrderSummary {
     id: number;
-    date: string;
-    status: 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled';
+    date: string; // ISO date string
+    status: 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled' | 'Pending'; // Match backend enum
     total: number;
     itemCount: number;
 }
@@ -27,26 +28,36 @@ interface OrderSummary {
  */
 const getStatusProps = (status: OrderSummary['status']) => {
     switch (status) {
+        case 'Pending':
+            return { icon: Clock, color: 'bg-yellow-100 text-yellow-800' };
         case 'Processing':
             return { icon: Clock, color: 'bg-accent/20 text-accent-foreground' };
         case 'Shipped':
             return { icon: Truck, color: 'bg-blue-100 text-blue-800' };
         case 'Delivered':
             return { icon: CheckCircle, color: 'bg-green-100 text-green-800' };
+        case 'Cancelled':
+            return { icon: XCircle, color: 'bg-red-100 text-red-800' };
         default:
             return { icon: Frown, color: 'bg-gray-100 text-gray-800' };
     }
 };
 
+const formatGHS = (amount: number) => 
+    new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS' }).format(amount);
+
+
 /**
  * Renders the user's list of past orders, fetched via API.
  */
 export function OrderHistoryList() {
+    const { isLoggedIn } = useAuth();
     // Fetch orders using TanStack Query
     const { data, isLoading, isError, error } = useQuery<{ orders: OrderSummary[] }>({
         queryKey: ['orders'],
         queryFn: () => apiFetch('/account/orders'), // GET /api/account/orders
-        staleTime: 1000 * 60 * 5, // Orders don't change often
+        enabled: isLoggedIn,
+        staleTime: 1000 * 60 * 5, 
     });
 
     const orders = data?.orders || [];
@@ -56,11 +67,11 @@ export function OrderHistoryList() {
         return <ProductGridSkeleton count={3} />;
     }
 
-    if (isError) {
+    if (isError || !isLoggedIn) {
         return (
             <div className="text-center py-10 text-red-600 border rounded-lg p-6">
-                <p>Failed to load order history. You may need to log in again.</p>
-                <p className="text-sm mt-2 text-red-400">Error: {error.message}</p>
+                <p>Failed to load order history. Please ensure you are logged in.</p>
+                {/* <p className="text-sm mt-2 text-red-400">Error: {error?.message}</p> */}
             </div>
         );
     }
@@ -87,7 +98,9 @@ export function OrderHistoryList() {
                         <CardHeader className="flex flex-row items-center justify-between p-4 border-b">
                             <div className="flex flex-col">
                                 <CardTitle className="text-lg">Order #{order.id}</CardTitle>
-                                <p className="text-sm text-foreground/70">Placed on {order.date}</p>
+                                <p className="text-sm text-foreground/70">
+                                    Placed on {new Date(order.date).toLocaleDateString()}
+                                </p>
                             </div>
                             <Badge className={`text-sm font-semibold flex items-center ${color}`}>
                                 <Icon className="w-3 h-3 mr-1" />
@@ -95,7 +108,7 @@ export function OrderHistoryList() {
                             </Badge>
                         </CardHeader>
                         <CardContent className="flex justify-between items-center p-4">
-                            <p className="text-xl font-bold text-primary">${order.total.toFixed(2)}</p>
+                            <p className="text-xl font-bold text-primary">{formatGHS(order.total)}</p>
                             <Link href={`/account/orders/${order.id}`}>
                                 <Button variant="outline" size="sm">
                                     View Details

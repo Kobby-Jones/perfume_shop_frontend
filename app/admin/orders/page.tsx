@@ -11,13 +11,18 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
+// Define the precise structure expected from the backend
 interface AdminOrderSummary {
     id: number;
-    date: string;
-    status: 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled';
-    total: number;
+    createdAt: string; // From Prisma
+    status: 'Pending' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled';
+    orderTotal: number;
     itemCount: number;
-    userId: number;
+    user?: { 
+        id: number; 
+        email: string; 
+        name: string; 
+    };
 }
 
 interface AdminOrdersRawResponse {
@@ -26,20 +31,37 @@ interface AdminOrdersRawResponse {
 
 type AdminOrdersFinalData = AdminOrderSummary[];
 
-const ALL_STATUSES = ['All', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
+const ALL_STATUSES = ['All', 'Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
 
 export default function AdminOrdersPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('All');
 
+    // Fetch Orders (GET /api/admin/orders)
     const { data: allOrders = [], isLoading, isError } = useQuery<
         AdminOrdersRawResponse,
         Error,
         AdminOrdersFinalData
     >({
         queryKey: ['adminAllOrders'],
-        queryFn: () => apiFetch('/admin/orders'),
-        select: (data) => data.orders,
+        queryFn: async () => {
+            try {
+                const response = await apiFetch('/admin/orders');
+                
+                // Validate response structure
+                if (!response || !response.orders) {
+                    console.error('Invalid API response:', response);
+                    return { orders: [] };
+                }
+                
+                return response;
+            } catch (error) {
+                console.error('Failed to fetch orders:', error);
+                return { orders: [] };
+            }
+        },
+        select: (data) => data.orders || [],
+        staleTime: 1000 * 30, // Frequent checks for new orders
     });
 
     const filteredOrders = useMemo(() => {
@@ -53,8 +75,8 @@ export default function AdminOrdersPage() {
         if (searchTerm) {
             results = results.filter(o => 
                 o.id.toString().includes(term) ||
-                o.userId.toString().includes(term) ||
-                o.status.toLowerCase().includes(term)
+                o.user?.email?.toLowerCase().includes(term) ||
+                o.user?.name?.toLowerCase().includes(term)
             );
         }
         return results;
@@ -65,7 +87,8 @@ export default function AdminOrdersPage() {
 
     const getStatusColor = (status: AdminOrderSummary['status']) => {
         switch (status) {
-            case 'Processing': return 'bg-yellow-200 text-yellow-800';
+            case 'Pending': return 'bg-yellow-200 text-yellow-800';
+            case 'Processing': return 'bg-purple-200 text-purple-800';
             case 'Shipped': return 'bg-blue-200 text-blue-800';
             case 'Delivered': return 'bg-green-200 text-green-800';
             case 'Cancelled': return 'bg-red-200 text-red-800';
@@ -96,7 +119,7 @@ export default function AdminOrdersPage() {
             {/* Filters */}
             <div className="bg-white p-4 rounded-lg shadow-sm border space-y-3">
                 <Input 
-                    placeholder="Search by Order ID or User ID..." 
+                    placeholder="Search by Order ID, User Name, or Email..." 
                     value={searchTerm} 
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full"
@@ -116,53 +139,12 @@ export default function AdminOrdersPage() {
                 </div>
             </div>
 
-            {/* Mobile Card View */}
-            <div className="block lg:hidden space-y-3">
-                {filteredOrders.length === 0 ? (
-                    <div className="bg-white rounded-lg p-6 text-center text-gray-500">
-                        No orders found matching filters.
-                    </div>
-                ) : (
-                    filteredOrders.map((order) => (
-                        <div key={order.id} className="bg-white rounded-lg shadow-md p-4 space-y-3">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <p className="font-bold text-lg">Order #{order.id}</p>
-                                    <p className="text-sm text-gray-500">User ID: {order.userId}</p>
-                                </div>
-                                <Badge className={getStatusColor(order.status)}>
-                                    {order.status}
-                                </Badge>
-                            </div>
-                            
-                            <div className="grid grid-cols-2 gap-3 text-sm">
-                                <div>
-                                    <p className="text-gray-500">Date</p>
-                                    <p className="font-medium">{new Date(order.date).toLocaleDateString()}</p>
-                                </div>
-                                <div>
-                                    <p className="text-gray-500">Items</p>
-                                    <p className="font-medium">{order.itemCount}</p>
-                                </div>
-                            </div>
-                            
-                            <div className="flex justify-between items-center pt-2 border-t">
-                                <p className="text-lg font-bold text-primary">{formatGHS(order.total)}</p>
-                                <Button variant="ghost" size="sm" className="text-blue-500">
-                                    View <ArrowRight className="w-3 h-3 ml-1" />
-                                </Button>
-                            </div>
-                        </div>
-                    ))
-                )}
-            </div>
-
             {/* Desktop Table View */}
-            <div className="hidden lg:block bg-white rounded-xl shadow-md overflow-x-auto">
+            <div className="bg-white rounded-xl shadow-md overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
-                            {['Order ID', 'User ID', 'Date', 'Total (GHS)', 'Items', 'Status', 'Actions'].map(header => (
+                            {['Order ID', 'Customer', 'Date', 'Total (GHS)', 'Items', 'Status', 'Actions'].map(header => (
                                 <th key={header} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                     {header}
                                 </th>
@@ -175,10 +157,13 @@ export default function AdminOrdersPage() {
                         )}
                         {filteredOrders.map((o) => (
                             <tr key={o.id}>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{o.id}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{o.userId}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(o.date).toLocaleDateString()}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-primary">{formatGHS(o.total)}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">#{o.id}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                    <p className='font-medium text-gray-900'>{o.user?.name || 'Unknown User'}</p>
+                                    <p className='text-xs text-gray-500'>{o.user?.email || 'No email'}</p>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(o.createdAt).toLocaleDateString()}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-primary">{formatGHS(o.orderTotal)}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{o.itemCount}</td>
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     <Badge className={getStatusColor(o.status)}>{o.status}</Badge>
@@ -187,6 +172,7 @@ export default function AdminOrdersPage() {
                                     <Button variant="ghost" size="sm" className="text-blue-500">
                                         View <ArrowRight className="w-3 h-3 ml-1" />
                                     </Button>
+                                    {/* TODO: Add logic to update order status here */}
                                 </td>
                             </tr>
                         ))}

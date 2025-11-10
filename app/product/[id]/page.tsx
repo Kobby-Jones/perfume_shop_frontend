@@ -5,9 +5,10 @@
 import { useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { ShoppingCart, Heart, Truck, Shield, RotateCcw, Star } from 'lucide-react';
+import { ShoppingCart, Heart, Truck, Shield, RotateCcw, Star, Package } from 'lucide-react';
 
-import { getProducts, Product, MOCK_PRODUCTS } from '@/lib/data/mock-products';
+import { Product } from '@/lib/data/mock-products'; // Keep for type definition for now
+import { apiFetch } from '@/lib/api/httpClient'; // Import API client
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
@@ -17,21 +18,26 @@ import { useWishlist } from '@/lib/hooks/useWishlist';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { ProductCard } from '@/components/product/ProductCard';
-import { ProductGridSkeleton } from '@/components/product/ProductListingSkeletons';
+import { ProductDetailSkeleton } from '@/components/product/ProductListingSkeletons';
 
-// New imports for Tabs & Reviews
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ReviewSection } from '@/components/product/ReviewSection';
 
-// Simple mock function to get a single product by ID
-async function getProductById(id: number): Promise<Product | undefined> {
-  await new Promise(resolve => setTimeout(resolve, 500));
-  return MOCK_PRODUCTS.find(p => p.id === id);
+// API function to get a single product by ID
+async function getProductByIdApi(id: number): Promise<Product | undefined> {
+    const data = await apiFetch(`/products/${id}`);
+    return data as Product;
 }
+
+// API function to get all products (used for related products section)
+async function getAllProductsApi(): Promise<Product[]> {
+    const data = await apiFetch(`/products`);
+    return data.products as Product[];
+}
+
 
 /**
  * Product Detail Page component.
- * Displays all product information, image gallery, stock status, and add-to-cart controls.
  */
 export default function ProductDetailPage() {
   const params = useParams();
@@ -42,16 +48,17 @@ export default function ProductDetailPage() {
   const { toggleWishlist, isProductInWishlist } = useWishlist();
 
   // Fetch the specific product data
-  const { data: product, isLoading } = useQuery<Product | undefined>({
+  const { data: product, isLoading: isProductLoading } = useQuery<Product | undefined>({
     queryKey: ['product', productId],
-    queryFn: () => getProductById(productId),
+    queryFn: () => getProductByIdApi(productId),
     enabled: !isNaN(productId),
   });
 
-  // Fetch related products (using all products minus the current one)
+  // Fetch all products for related section
   const { data: allProducts = [] } = useQuery<Product[]>({
     queryKey: ['products'],
-    queryFn: getProducts,
+    queryFn: getAllProductsApi,
+    staleTime: 1000 * 60 * 5, // Cache product list for 5 minutes
   });
 
   const relatedProducts = useMemo(() => {
@@ -62,8 +69,11 @@ export default function ProductDetailPage() {
       .slice(0, 4);
   }, [allProducts, productId, product]);
 
-  if (isLoading || !product) {
-    if (isLoading) return <div className="container py-12"><ProductGridSkeleton /></div>;
+  if (isProductLoading) {
+    return <div className="container py-12"><ProductDetailSkeleton /></div>;
+  }
+    
+  if (!product) {
     return (
       <div className="container py-20 text-center">
         <h1 className="text-3xl font-bold">Product Not Found</h1>
@@ -89,7 +99,6 @@ export default function ProductDetailPage() {
 
   const handleAddToCart = () => {
     addToCart(product.id, quantity);
-    console.log(`Added ${quantity}x ${product.name} to cart`);
   };
 
   const handleToggleWishlist = () => {
@@ -102,6 +111,16 @@ export default function ProductDetailPage() {
       setQuantity(newQuantity);
     }
   };
+
+  // Ensure details object exists and has required sub-arrays
+  const details = product.details as any;
+  const scentProfile = Array.isArray(details?.scentProfile) ? details.scentProfile : [];
+  const season = Array.isArray(details?.season) ? details.season : [];
+  const occasion = Array.isArray(details?.occasion) ? details.occasion : [];
+  const topNotes = Array.isArray(details?.topNotes) ? details.topNotes : [];
+  const middleNotes = Array.isArray(details?.middleNotes) ? details.middleNotes : [];
+  const baseNotes = Array.isArray(details?.baseNotes) ? details.baseNotes : [];
+
 
   return (
     <div className="container py-6 md:py-12">
@@ -121,14 +140,10 @@ export default function ProductDetailPage() {
                 -{discountPercentage}% OFF
               </Badge>
             )}
+            {/* These flags are not stored in DB, keeping mock logic temporarily or removing them */}
             {product.isNew && (
               <Badge className="bg-blue-500 hover:bg-blue-600 text-white font-semibold">
                 New Arrival
-              </Badge>
-            )}
-            {product.isBestseller && (
-              <Badge className="bg-amber-500 hover:bg-amber-600 text-white font-semibold">
-                Best Seller
               </Badge>
             )}
             {product.isFeatured && (
@@ -165,7 +180,7 @@ export default function ProductDetailPage() {
               {product.rating?.toFixed(1)}
             </span>
             <span className="text-sm text-muted-foreground">
-              ({product.reviewCount} reviews)
+              ({product.reviewCount || 0} reviews)
             </span>
           </div>
 
@@ -284,19 +299,19 @@ export default function ProductDetailPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <h4 className="font-semibold text-sm text-muted-foreground">Size</h4>
-                    <p className="font-medium">{product.details.size}</p>
+                    <p className="font-medium">{details?.size}</p>
                   </div>
                   <div className="space-y-2">
                     <h4 className="font-semibold text-sm text-muted-foreground">Concentration</h4>
-                    <p className="font-medium">{product.details.concentration}</p>
+                    <p className="font-medium">{details?.concentration}</p>
                   </div>
                   <div className="space-y-2">
                     <h4 className="font-semibold text-sm text-muted-foreground">Longevity</h4>
-                    <p className="font-medium">{product.details.longevity}</p>
+                    <p className="font-medium">{details?.longevity}</p>
                   </div>
                   <div className="space-y-2">
                     <h4 className="font-semibold text-sm text-muted-foreground">Sillage</h4>
-                    <p className="font-medium">{product.details.sillage}</p>
+                    <p className="font-medium">{details?.sillage}</p>
                   </div>
                 </div>
 
@@ -305,7 +320,7 @@ export default function ProductDetailPage() {
                 <div className="space-y-3">
                   <h4 className="font-semibold">Scent Profile</h4>
                   <div className="flex flex-wrap gap-2">
-                    {product.details.scentProfile.map((profile) => (
+                    {scentProfile.map((profile: string) => (
                       <Badge key={profile} variant="secondary">
                         {profile}
                       </Badge>
@@ -319,7 +334,7 @@ export default function ProductDetailPage() {
                     <div>
                       <p className="text-sm text-muted-foreground mb-1">Season</p>
                       <div className="flex flex-wrap gap-1">
-                        {product.details.season.map((s) => (
+                        {season.map((s: string) => (
                           <Badge key={s} variant="outline" className="text-xs">
                             {s}
                           </Badge>
@@ -329,7 +344,7 @@ export default function ProductDetailPage() {
                     <div>
                       <p className="text-sm text-muted-foreground mb-1">Occasion</p>
                       <div className="flex flex-wrap gap-1">
-                        {product.details.occasion.map((o) => (
+                        {occasion.map((o: string) => (
                           <Badge key={o} variant="outline" className="text-xs">
                             {o}
                           </Badge>
@@ -348,7 +363,7 @@ export default function ProductDetailPage() {
                       Top Notes
                     </h4>
                     <p className="text-sm text-foreground/80">
-                      {product.details.topNotes.join(', ')}
+                      {topNotes.join(', ')}
                     </p>
                   </div>
 
@@ -357,7 +372,7 @@ export default function ProductDetailPage() {
                       Middle Notes
                     </h4>
                     <p className="text-sm text-foreground/80">
-                      {product.details.middleNotes.join(', ')}
+                      {middleNotes.join(', ')}
                     </p>
                   </div>
 
@@ -366,7 +381,7 @@ export default function ProductDetailPage() {
                       Base Notes
                     </h4>
                     <p className="text-sm text-foreground/80">
-                      {product.details.baseNotes.join(', ')}
+                      {baseNotes.join(', ')}
                     </p>
                   </div>
                 </div>

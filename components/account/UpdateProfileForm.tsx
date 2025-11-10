@@ -14,6 +14,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { apiFetch } from '@/lib/api/httpClient';
+import { useAuth } from '@/lib/hooks/useAuth'; // Import useAuth to refresh context user
 
 // Schema for updating personal details
 const profileSchema = z.object({
@@ -31,12 +32,21 @@ const PROFILE_QUERY_KEY = 'userProfile';
  */
 export function UpdateProfileForm() {
   const queryClient = useQueryClient();
+  const { refetchUser } = useAuth(); // Get refetch utility
 
-  // --- 1. Fetch current user profile ---
-  const { data: profile, isLoading } = useQuery<{ name: string; email: string }>({
+  // --- 1. Fetch current user profile from /auth/me (or a dedicated /account/profile endpoint) ---
+  // Since we implemented /auth/me, we rely on it for the base data
+  const { data: profile, isLoading } = useQuery<
+    { user: { name: string; email: string } },
+    Error,
+    { name: string; email: string } // Add the selected data type here
+  >({
     queryKey: [PROFILE_QUERY_KEY],
-    queryFn: () => apiFetch('/account/profile'), // GET /api/account/profile
+    queryFn: () => apiFetch('/auth/me'), 
+    select: (data) => data.user, // Select the user object from the response
+    staleTime: 1000 * 60, // Keep data fresh for 1 minute
   });
+
 
   // --- 2. Initialize form ---
   const form = useForm<ProfileFormData>({
@@ -57,12 +67,15 @@ export function UpdateProfileForm() {
   // --- 4. Mutation for updating profile ---
   const updateProfileMutation = useMutation({
     mutationFn: (data: ProfileFormData) =>
-      apiFetch('/account/profile', {
+      apiFetch('/account/profile', { // This endpoint maps to PUT /api/account/profile on backend
         method: 'PUT',
         body: JSON.stringify(data),
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [PROFILE_QUERY_KEY] });
+      // Invalidate the profile query to refetch latest data
+      queryClient.invalidateQueries({ queryKey: [PROFILE_QUERY_KEY] }); 
+      // Also refetch the user context to update header/dashboard immediately
+      refetchUser(); 
       toast.success('Your profile information has been updated.');
     },
     onError: (error: any) => {
@@ -109,7 +122,8 @@ export function UpdateProfileForm() {
             <FormItem>
               <FormLabel>Email Address</FormLabel>
               <FormControl>
-                <Input type="email" {...field} placeholder="Enter your email" />
+                {/* Note: Disabling email editing for simplicity, often requires verification loop */}
+                <Input type="email" {...field} placeholder="Enter your email" disabled /> 
               </FormControl>
               <FormMessage />
             </FormItem>

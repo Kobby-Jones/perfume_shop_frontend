@@ -2,10 +2,13 @@
 
 'use client';
 
-import { useState } from 'react';
-import { Filter, X } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Filter, X, Loader2 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 
-import { MOCK_PRODUCTS } from '@/lib/data/mock-products';
+import { apiFetch } from '@/lib/api/httpClient'; // Import API client
+// import { MOCK_PRODUCTS } from '@/lib/data/mock-products'; // <-- REMOVED MOCK IMPORT
+
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -13,33 +16,54 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Separator } from '@/components/ui/separator';
 
-/**
- * Utility function to extract unique brands and max price from mock data.
- */
-const getFilterOptions = () => {
-    const brands = Array.from(new Set(MOCK_PRODUCTS.map(p => p.brand)));
-    const maxPrice = Math.max(...MOCK_PRODUCTS.map(p => p.price));
-    return { brands, maxPrice: Math.ceil(maxPrice / 10) * 10 }; // Round up to nearest 10
+interface FilterOptionsResponse {
+    brands: string[];
+    maxPrice: number;
+}
+
+// Function to fetch dynamic filter options from a new hypothetical API endpoint
+// NOTE: We assume a new API endpoint /products/filters that returns this
+const fetchFilterOptions = async (): Promise<FilterOptionsResponse> => {
+    // For now, we mock the API response structure until the backend is fully deployed
+    // In a production backend, this endpoint would query unique brands and MAX(price).
+    return {
+        brands: ['AromaLux', 'The Scent Co.', 'Oud Masters', 'Citrus Bliss', 'Elite Fragrances', 'Urban Essence', 'Lumière Parfum', 'BlueWave', 'Scentory Labs', 'Flora Essence', 'Artisan Blends'],
+        maxPrice: 200, // Safe maximum price based on mock data
+    };
+    // const data = await apiFetch('/products/filters');
+    // return data as FilterOptionsResponse;
 };
 
-// Global filter options
-const { brands, maxPrice } = getFilterOptions();
-const priceRangeMin = 20; // Minimum price filterable
+
+const priceRangeMin = 0; 
 
 /**
  * Renders the interactive filter controls for the Product Listing Page.
- * Uses a mobile-first approach (Sheet for small screens, persistent sidebar for desktop).
  * @param props.onFilterChange - Callback function when filter values change.
  */
 export function FilterSidebar({ onFilterChange }: { onFilterChange: (filters: any) => void }) {
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
-  const [priceRange, setPriceRange] = useState<number[]>([priceRangeMin, maxPrice]);
+  
+  // Fetch dynamic filter options
+  const { data: filterOptions, isLoading: isLoadingOptions } = useQuery<FilterOptionsResponse>({
+      queryKey: ['filterOptions'],
+      queryFn: fetchFilterOptions,
+      staleTime: Infinity, // These options don't change often
+  });
+
+  const maxPrice = filterOptions?.maxPrice || 1000;
+  const initialPriceRange: number[] = [priceRangeMin, maxPrice];
+  const [priceRange, setPriceRange] = useState<number[]>(initialPriceRange);
+  
+  // Re-initialize price range if maxPrice changes (e.g., first load)
+  useMemo(() => {
+    setPriceRange(initialPriceRange);
+  }, [maxPrice]);
+
 
   /**
    * Handles changes to the selected brand checkboxes.
-   * @param brand - The brand name that was toggled.
-   * @param isChecked - The new checked state.
    */
   const handleBrandChange = (brand: string, isChecked: boolean) => {
     const newBrands = isChecked
@@ -47,17 +71,15 @@ export function FilterSidebar({ onFilterChange }: { onFilterChange: (filters: an
       : selectedBrands.filter((b) => b !== brand);
     
     setSelectedBrands(newBrands);
-    onFilterChange({ brands: newBrands, price: priceRange });
+    onFilterChange({ brands: newBrands });
   };
 
   /**
    * Handles changes to the price range slider.
-   * @param newRange - The new array containing [min, max] price values.
    */
-  const handlePriceChange = (newRange: number[]) => {
+  const handlePriceUpdate = (newRange: number[]) => {
     setPriceRange(newRange);
-    // Debounce or apply filter immediately depending on UX preference. Applying immediately for simplicity.
-    onFilterChange({ brands: selectedBrands, price: newRange });
+    onFilterChange({ price: newRange });
   };
 
   /**
@@ -65,13 +87,20 @@ export function FilterSidebar({ onFilterChange }: { onFilterChange: (filters: an
    */
   const handleClearFilters = () => {
     setSelectedBrands([]);
-    setPriceRange([priceRangeMin, maxPrice]);
-    onFilterChange({ brands: [], price: [priceRangeMin, maxPrice] });
+    setPriceRange(initialPriceRange);
+    onFilterChange({ 
+        brands: [], 
+        price: initialPriceRange 
+    });
     setIsSheetOpen(false);
   };
 
   // The actual filter content, reusable for both mobile Sheet and desktop sidebar
-  const filterContent = (
+  const filterContent = isLoadingOptions ? (
+      <div className="flex justify-center items-center h-32">
+          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      </div>
+  ) : (
     <div className="space-y-6 p-4">
       
       {/* Price Range Filter */}
@@ -85,7 +114,7 @@ export function FilterSidebar({ onFilterChange }: { onFilterChange: (filters: an
           max={maxPrice}
           step={1}
           value={priceRange}
-          onValueChange={handlePriceChange}
+          onValueChange={handlePriceUpdate}
           className="w-full pt-2"
         />
       </div>
@@ -95,7 +124,7 @@ export function FilterSidebar({ onFilterChange }: { onFilterChange: (filters: an
       {/* Brand Filter (Checkboxes) */}
       <div className="space-y-4">
         <h4 className="text-lg font-semibold text-foreground">Brand</h4>
-        {brands.map((brand) => (
+        {(filterOptions?.brands || []).map((brand) => (
           <div key={brand} className="flex items-center space-x-2">
             <Checkbox
               id={`brand-${brand}`}
@@ -111,12 +140,12 @@ export function FilterSidebar({ onFilterChange }: { onFilterChange: (filters: an
 
       <Separator className="bg-border" />
 
-      {/* Category Filter (Placeholder) */}
+      {/* Category Filter (Placeholder - assuming this is handled via URL params) */}
       <div className="space-y-4">
-        <h4 className="text-lg font-semibold text-foreground">Category</h4>
+        <h4 className="text-lg font-semibold text-foreground">Category (via URL)</h4>
         {['Women', 'Men', 'Unisex'].map((category) => (
           <div key={category} className="flex items-center space-x-2">
-            {/* Using a disabled checkbox for demonstration */}
+            {/* Keeping as disabled/placeholder as the main route handles this filter */}
             <Checkbox id={`cat-${category}`} disabled /> 
             <Label htmlFor={`cat-${category}`} className="text-sm font-normal text-foreground/60">
               {category}
@@ -130,6 +159,7 @@ export function FilterSidebar({ onFilterChange }: { onFilterChange: (filters: an
         variant="outline" 
         onClick={handleClearFilters}
         className="w-full mt-6"
+        disabled={selectedBrands.length === 0 && priceRange[0] === priceRangeMin && priceRange[1] === maxPrice}
       >
         <X className="w-4 h-4 mr-2" />
         Clear Filters

@@ -2,96 +2,83 @@
 
 'use client';
 
-import { useState } from 'react';
-import { MessageSquare, Star, Check, X, Loader2, AlertCircle } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { MessageSquare, Star, Check, X, Loader2, Filter } from 'lucide-react';
+import { apiFetch } from '@/lib/api/httpClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useAlert } from '@/components/shared/ModalAlert';
 
-// Mock review data
+// Define the precise structure expected from the backend
 interface Review {
     id: number;
-    productName: string;
-    customerName: string;
-    rating: number;
+    title: string;
     comment: string;
-    date: string;
+    rating: number;
+    createdAt: string; 
     status: 'pending' | 'approved' | 'rejected';
-    verified: boolean;
+    product: { name: string; id: number };
+    user: { name: string; email: string };
 }
 
-const mockReviews: Review[] = [
-    {
-        id: 1,
-        productName: "Chanel No. 5 Eau de Parfum",
-        customerName: "Sarah Johnson",
-        rating: 5,
-        comment: "Absolutely love this perfume! The scent lasts all day and gets so many compliments.",
-        date: "2025-11-08",
-        status: "pending",
-        verified: true
-    },
-    {
-        id: 2,
-        productName: "Dior Sauvage EDT",
-        customerName: "Michael Chen",
-        rating: 4,
-        comment: "Great masculine scent, very fresh. Slightly expensive but worth it.",
-        date: "2025-11-07",
-        status: "approved",
-        verified: true
-    },
-    {
-        id: 3,
-        productName: "Tom Ford Black Orchid",
-        customerName: "Emily Davis",
-        rating: 5,
-        comment: "Luxurious and unique! Perfect for evening wear.",
-        date: "2025-11-06",
-        status: "approved",
-        verified: false
-    },
-    {
-        id: 4,
-        productName: "Yves Saint Laurent Libre",
-        customerName: "Anonymous",
-        rating: 2,
-        comment: "Not what I expected. Too strong for my taste.",
-        date: "2025-11-05",
-        status: "pending",
-        verified: false
-    },
-];
-
-const STATUS_FILTERS = ['All', 'Pending', 'Approved', 'Rejected'];
+const STATUS_FILTERS = ['All', 'pending', 'approved', 'rejected'];
 
 export default function AdminReviewsPage() {
-    const [reviews, setReviews] = useState<Review[]>(mockReviews);
+    const queryClient = useQueryClient();
+    const { alert } = useAlert();
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('All');
-
-    const filteredReviews = reviews.filter(review => {
-        const matchesSearch = review.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                            review.customerName.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesStatus = statusFilter === 'All' || review.status === statusFilter.toLowerCase();
-        return matchesSearch && matchesStatus;
+    
+    // Fetch Reviews (GET /api/admin/reviews)
+    const { data: allReviews = [], isLoading, isError } = useQuery<Review[]>({
+        queryKey: ['adminReviews'],
+        queryFn: async () => {
+            const data = await apiFetch('/admin/reviews');
+            return data.reviews as Review[];
+        },
+        staleTime: 1000 * 60, // Reviews change often during moderation
     });
 
-    const stats = {
-        total: reviews.length,
-        pending: reviews.filter(r => r.status === 'pending').length,
-        approved: reviews.filter(r => r.status === 'approved').length,
-        avgRating: (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
-    };
+    // Mutation to update review status
+    const updateStatusMutation = useMutation({
+        mutationFn: ({ id, status }: { id: number, status: 'approved' | 'rejected' }) => 
+            apiFetch(`/admin/reviews/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['adminReviews'] });
+            alert({ title: "Review Status Updated", message: "Review successfully moderated.", variant: 'success' });
+        },
+        onError: (error: any) => {
+            alert({ title: "Update Failed", message: error.message || "Could not update review status.", variant: 'error' });
+        },
+    });
 
-    const handleApprove = (id: number) => {
-        setReviews(reviews.map(r => r.id === id ? { ...r, status: 'approved' as const } : r));
-    };
 
-    const handleReject = (id: number) => {
-        setReviews(reviews.map(r => r.id === id ? { ...r, status: 'rejected' as const } : r));
+    const filteredReviews = useMemo(() => {
+        return allReviews.filter(review => {
+            const matchesSearch = review.product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                review.user.name.toLowerCase().includes(searchTerm.toLowerCase());
+            const matchesStatus = statusFilter === 'All' || review.status === statusFilter;
+            return matchesSearch && matchesStatus;
+        });
+    }, [allReviews, searchTerm, statusFilter]);
+
+    const stats = useMemo(() => {
+        const total = allReviews.length;
+        const pending = allReviews.filter(r => r.status === 'pending').length;
+        const approved = allReviews.filter(r => r.status === 'approved').length;
+        const sum = allReviews.reduce((s, r) => s + r.rating, 0);
+        const avgRating = total > 0 ? (sum / total).toFixed(1) : 'N/A';
+        
+        return { total, pending, approved, avgRating };
+    }, [allReviews]);
+
+
+    const handleUpdateStatus = (id: number, status: 'approved' | 'rejected') => {
+        updateStatusMutation.mutate({ id, status });
     };
 
     const renderStars = (rating: number) => {
@@ -100,12 +87,30 @@ export default function AdminReviewsPage() {
                 {[1, 2, 3, 4, 5].map((star) => (
                     <Star 
                         key={star} 
-                        className={`w-4 h-4 ${star <= rating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`}
+                        className={`w-4 h-4 ${star <= rating ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}`}
                     />
                 ))}
             </div>
         );
     };
+    
+    const getStatusColor = (status: Review['status']) => {
+        switch (status) {
+            case 'pending': return 'bg-yellow-500 text-white';
+            case 'approved': return 'bg-green-500 text-white';
+            case 'rejected': return 'bg-red-500 text-white';
+            default: return 'bg-gray-500';
+        }
+    };
+
+    if (isLoading) return (
+        <div className="flex justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+    );
+
+    if (isError) return <div className="text-red-500 p-4">Failed to load review data.</div>;
+
 
     return (
         <div className="space-y-4 md:space-y-6">
@@ -146,7 +151,7 @@ export default function AdminReviewsPage() {
                     </CardHeader>
                     <CardContent>
                         <p className="text-xl md:text-2xl font-bold flex items-center">
-                            <Star className="w-5 h-5 fill-yellow-400 text-yellow-400 mr-1" />
+                            <Star className="w-5 h-5 fill-amber-400 text-amber-400 mr-1" />
                             {stats.avgRating}
                         </p>
                     </CardContent>
@@ -167,7 +172,7 @@ export default function AdminReviewsPage() {
                     </SelectTrigger>
                     <SelectContent>
                         {STATUS_FILTERS.map(f => (
-                            <SelectItem key={f} value={f}>{f}</SelectItem>
+                            <SelectItem key={f} value={f}>{f.charAt(0).toUpperCase() + f.slice(1)}</SelectItem>
                         ))}
                     </SelectContent>
                 </Select>
@@ -181,49 +186,34 @@ export default function AdminReviewsPage() {
                     </div>
                 ) : (
                     filteredReviews.map((review) => (
-                        <Card key={review.id} className={
-                            review.status === 'pending' ? 'border-l-4 border-yellow-500' :
-                            review.status === 'approved' ? 'border-l-4 border-green-500' :
-                            'border-l-4 border-red-500'
-                        }>
+                        <Card key={review.id} className={`border-l-4 ${getStatusColor(review.status).replace('bg', 'border')}-500`}>
                             <CardContent className="p-4">
                                 <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
                                     <div className="flex-1 space-y-2">
                                         <div className="flex items-center gap-2 flex-wrap">
-                                            <h3 className="font-semibold text-base">{review.productName}</h3>
-                                            {review.verified && (
-                                                <Badge variant="outline" className="text-xs">
-                                                    <Check className="w-3 h-3 mr-1" />Verified Purchase
-                                                </Badge>
-                                            )}
+                                            <h3 className="font-semibold text-base">{review.product.name} (ID: {review.product.id})</h3>
+                                            <Badge className={getStatusColor(review.status)}>
+                                                {review.status.charAt(0).toUpperCase() + review.status.slice(1)}
+                                            </Badge>
                                         </div>
                                         
                                         <div className="flex items-center gap-2 text-sm text-gray-600">
                                             {renderStars(review.rating)}
                                             <span>•</span>
-                                            <span>{review.customerName}</span>
+                                            <span>{review.user.name} ({review.user.email})</span>
                                             <span>•</span>
-                                            <span>{new Date(review.date).toLocaleDateString()}</span>
+                                            <span>{new Date(review.createdAt).toLocaleDateString()}</span>
                                         </div>
 
                                         <p className="text-sm text-gray-700 mt-2">{review.comment}</p>
-
-                                        <div className="flex items-center gap-2 pt-2">
-                                            <Badge className={
-                                                review.status === 'pending' ? 'bg-yellow-500' :
-                                                review.status === 'approved' ? 'bg-green-500' :
-                                                'bg-red-500'
-                                            }>
-                                                {review.status.charAt(0).toUpperCase() + review.status.slice(1)}
-                                            </Badge>
-                                        </div>
                                     </div>
 
                                     {review.status === 'pending' && (
                                         <div className="flex gap-2 md:flex-col">
                                             <Button 
                                                 size="sm" 
-                                                onClick={() => handleApprove(review.id)}
+                                                onClick={() => handleUpdateStatus(review.id, 'approved')}
+                                                disabled={updateStatusMutation.isPending}
                                                 className="flex-1 md:flex-none bg-green-600 hover:bg-green-700"
                                             >
                                                 <Check className="w-4 h-4 mr-1" />Approve
@@ -231,7 +221,8 @@ export default function AdminReviewsPage() {
                                             <Button 
                                                 size="sm" 
                                                 variant="outline"
-                                                onClick={() => handleReject(review.id)}
+                                                onClick={() => handleUpdateStatus(review.id, 'rejected')}
+                                                disabled={updateStatusMutation.isPending}
                                                 className="flex-1 md:flex-none text-red-600 hover:bg-red-50"
                                             >
                                                 <X className="w-4 h-4 mr-1" />Reject

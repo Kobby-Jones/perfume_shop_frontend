@@ -19,7 +19,7 @@ interface PaymentStepProps {
     isCreatingOrder: boolean;
     onInitiatePayment: () => void;
     onPaymentSuccess: (reference: string) => void;
-    currency: string;
+    orderTotalCents: number; // NEW: Final amount to pay (in cents/kobo)
 }
 
 export function PaymentStep({ 
@@ -28,7 +28,8 @@ export function PaymentStep({
     orderInfo, 
     isCreatingOrder,
     onInitiatePayment,
-    onPaymentSuccess 
+    onPaymentSuccess,
+    orderTotalCents // NEW
 }: PaymentStepProps) {
     const { user, isLoggedIn } = useAuth();
     const [phoneNumber, setPhoneNumber] = useState('');
@@ -37,6 +38,8 @@ export function PaymentStep({
     const hasValidOrder = orderInfo && orderInfo.orderId && orderInfo.orderTotalCents > 0;
     const canInitiatePayment = isLoggedIn && data.address && !isCreatingOrder;
 
+    const displayFinalAmount = (orderTotalCents / 100).toFixed(2);
+    
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -64,9 +67,12 @@ export function PaymentStep({
                     <div className="flex items-start gap-3">
                         <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
                         <div>
-                            <p className="font-semibold text-blue-900 mb-1">Ready to Complete Your Order</p>
+                            <p className="font-semibold text-blue-900 mb-1">Ready to Create Your Order</p>
                             <p className="text-sm text-blue-800">
-                                Click "Create Order & Pay" below to finalize your order and proceed to secure payment.
+                                Click "Create Order & Pay" below to finalize your order details and proceed to secure payment.
+                            </p>
+                            <p className="text-lg font-bold text-blue-900 mt-2">
+                                Final Amount: GHS {displayFinalAmount}
                             </p>
                         </div>
                     </div>
@@ -81,10 +87,10 @@ export function PaymentStep({
                             <p className="font-semibold text-green-900 mb-1">Order Created Successfully!</p>
                             <div className="flex items-center justify-between">
                                 <p className="text-sm text-green-800">
-                                    Order #{orderInfo.orderId}
+                                    Order **#{orderInfo.orderId}**
                                 </p>
                                 <p className="text-lg font-bold text-green-900">
-                                    GHS {(orderInfo.orderTotalCents / 100).toFixed(2)}
+                                    GHS {displayFinalAmount}
                                 </p>
                             </div>
                         </div>
@@ -115,14 +121,12 @@ export function PaymentStep({
                         <CreditCard className="h-4 w-4" />
                         Card Payment
                     </div>
-                    <div className="px-3 py-2 bg-[#FFCC00] border rounded-lg text-xs font-bold flex items-center gap-2">
+                    {/* Placeholder badges for Ghanaian mobile money options */}
+                    <div className="px-3 py-2 bg-[#FFCC00] border rounded-lg text-xs font-bold flex items-center gap-2 text-black">
                         MTN MoMo
                     </div>
                     <div className="px-3 py-2 bg-[#E31E24] text-white border rounded-lg text-xs font-bold flex items-center gap-2">
                         Telecel Cash
-                    </div>
-                    <div className="px-3 py-2 bg-gradient-to-r from-[#E31E24] to-[#0066CC] text-white border rounded-lg text-xs font-bold flex items-center gap-2">
-                        AirtelTigo
                     </div>
                 </div>
                 
@@ -135,7 +139,7 @@ export function PaymentStep({
                     </p>
                 </div>
 
-                {/* Phone Number Input */}
+                {/* Phone Number Input (Kept for MoMo context) */}
                 <div className="space-y-2">
                     <label className="text-sm font-semibold">Mobile Money Number (Optional)</label>
                     <Input 
@@ -147,7 +151,7 @@ export function PaymentStep({
                         disabled={isCreatingOrder}
                     />
                     <p className="text-xs text-muted-foreground">
-                        For mobile money payments, enter your registered number
+                        Required for Mobile Money payments
                     </p>
                 </div>
                 
@@ -157,7 +161,7 @@ export function PaymentStep({
                         type="button"
                         className="w-full text-base h-12 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 shadow-lg" 
                         onClick={onInitiatePayment}
-                        disabled={!canInitiatePayment || isCreatingOrder}
+                        disabled={!canInitiatePayment || isCreatingOrder || orderTotalCents <= 0}
                     >
                         {isCreatingOrder ? (
                             <>
@@ -175,11 +179,10 @@ export function PaymentStep({
 
                 {hasValidOrder && (
                     <PaystackForm 
-                        amount={orderInfo.orderTotalCents}
+                        amount={orderTotalCents} // Use the final calculated amount
                         email={orderInfo.userEmail}
                         reference={orderInfo.paymentReference}
                         onSuccess={onPaymentSuccess}
-                        currency="GHS"
                     />
                 )}
 

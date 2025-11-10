@@ -1,3 +1,5 @@
+// lib/hooks/useCart.tsx
+
 'use client';
 
 import React, { createContext, useContext, useMemo, useCallback } from 'react';
@@ -6,9 +8,10 @@ import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api/httpClient';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'sonner'; 
-import { Product } from '@/lib/data/mock-products';
+import { Product } from '@/lib/data/mock-products'; // Used for local type definition
 
 // --- API Response & Type Definitions ---
+// Matches the structure returned by GET /api/cart
 interface CartResponse {
   items: CartDetailItem[];
   totals: {
@@ -22,7 +25,7 @@ interface CartResponse {
 export interface CartDetailItem {
   productId: number;
   quantity: number;
-  product: Product;
+  product: Product; // Full product details included here
   subtotal: number;
 }
 
@@ -36,6 +39,7 @@ interface CartContextType {
   removeFromCart: (productId: number) => void;
   updateQuantity: (productId: number, quantity: number) => void;
   clearCart: () => void;
+  refetchCart: () => void; // Added for manual checkout trigger
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -46,15 +50,18 @@ const CART_QUERY_KEY = 'cart';
  */
 const useCartLogic = () => {
   const queryClient = useQueryClient();
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, isLoading: isAuthLoading } = useAuth();
   const router = useRouter();
 
   // --- 1. Fetch Cart Data (Only when logged in) ---
-  const { data, isLoading } = useQuery<CartResponse>({
+  const { data, isLoading, refetch } = useQuery<CartResponse>({
     queryKey: [CART_QUERY_KEY],
-    queryFn: () => apiFetch('/cart'),
-    enabled: isLoggedIn, // Fetch only if authenticated
+    queryFn: () => apiFetch('/cart'), // Live API call
+    enabled: isLoggedIn && !isAuthLoading, // Fetch only if authenticated and auth state is settled
+    staleTime: 1000 * 30,
   });
+  
+  const refetchCart = () => refetch();
 
   const cartDetails = data?.items || [];
   const totals = data?.totals;
@@ -66,8 +73,10 @@ const useCartLogic = () => {
     [cartDetails]
   );
 
-  // --- 3. Mutations ---
-  const mutation = useMutation({
+  // --- 3. Mutations (Uses TanStack Query to keep UI in sync) ---
+
+  // Unified mutation for add/update
+  const updateCartMutation = useMutation({
     mutationFn: ({ productId, quantity }: { productId: number; quantity: number }) =>
       apiFetch('/cart', {
         method: 'POST',
@@ -75,15 +84,16 @@ const useCartLogic = () => {
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [CART_QUERY_KEY] });
-      toast.success('Item added to cart');
+      toast.success('Cart updated.');
     },
     onError: (error: any) => {
       console.error('Cart update failed:', error);
-      toast.error(error.message || 'Failed to update cart. Please try again.');
+      toast.error(error.message || 'Failed to update cart. Check stock and try again.');
     },
   });
 
-  const removeMutation = useMutation({
+  // Mutation for removing an item
+  const removeCartMutation = useMutation({
     mutationFn: (productId: number) =>
       apiFetch(`/cart/${productId}`, { method: 'DELETE' }),
     onSuccess: () => {
@@ -96,7 +106,7 @@ const useCartLogic = () => {
     },
   });
 
-  // --- 4. Auth-Protected Actions ---
+  // --- 4. Auth-Protected Action Wrapper ---
   const checkAuthAndProceed = useCallback(
     (action: () => void) => {
       if (!isLoggedIn) {
@@ -113,38 +123,39 @@ const useCartLogic = () => {
   const addToCart = useCallback(
     (productId: number, quantity: number = 1) => {
       checkAuthAndProceed(() => {
-        const existingItem = cartDetails.find(
-          (item) => item.productId === productId
-        );
-        const newQuantity = (existingItem?.quantity || 0) + quantity;
-        mutation.mutate({ productId, quantity: newQuantity });
+        // Calculate the target quantity: find existing, add new quantity
+        const existingItem = cartDetails.find(item => item.productId === productId);
+        const targetQuantity = (existingItem?.quantity || 0) + quantity;
+        
+        updateCartMutation.mutate({ productId, quantity: targetQuantity });
       });
     },
-    [cartDetails, mutation, checkAuthAndProceed]
+    [cartDetails, updateCartMutation, checkAuthAndProceed]
   );
 
   const updateQuantity = useCallback(
     (productId: number, quantity: number) => {
       checkAuthAndProceed(() => {
         if (quantity <= 0) {
-          removeMutation.mutate(productId);
+          removeCartMutation.mutate(productId);
           return;
         }
-        mutation.mutate({ productId, quantity });
+        updateCartMutation.mutate({ productId, quantity });
       });
     },
-    [mutation, removeMutation, checkAuthAndProceed]
+    [updateCartMutation, removeCartMutation, checkAuthAndProceed]
   );
 
   const removeFromCart = useCallback(
     (productId: number) => {
-      checkAuthAndProceed(() => removeMutation.mutate(productId));
+      checkAuthAndProceed(() => removeCartMutation.mutate(productId));
     },
-    [removeMutation, checkAuthAndProceed]
+    [removeCartMutation, checkAuthAndProceed]
   );
 
   const clearCart = useCallback(() => {
-    toast.info('Clear cart feature not yet implemented');
+    // NOTE: Backend API for /api/cart/clear is missing, keeping the mock toast.
+    toast.info('Clear cart feature not yet implemented on the backend.');
   }, []);
 
   // --- 6. Return All Cart Utilities ---
@@ -153,11 +164,12 @@ const useCartLogic = () => {
     cartTotal,
     totalItems,
     totals,
-    isLoading,
+    isLoading: isLoading || isAuthLoading, // Combine loading states
     addToCart,
     removeFromCart,
     updateQuantity,
     clearCart,
+    refetchCart,
   };
 };
 

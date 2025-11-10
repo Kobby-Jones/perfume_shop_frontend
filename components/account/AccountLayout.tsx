@@ -35,7 +35,7 @@ export function AccountLayout({ children }: { children: ReactNode }) {
         <aside className="w-full lg:w-64 lg:flex-shrink-0">
             <nav className="flex lg:flex-col space-x-4 lg:space-x-0 lg:space-y-2 p-4 border rounded-lg overflow-x-auto">
                 {accountNavLinks.map((link) => {
-                    const isActive = pathname === link.href || (pathname.startsWith(link.href) && link.href !== '/account');
+                    const isActive = pathname === link.href || (pathname.startsWith(link.href) && link.href !== '/account' && (link.href === '/account/addresses' || pathname.startsWith(link.href)));
                     const Icon = link.icon;
                     return (
                         <Link

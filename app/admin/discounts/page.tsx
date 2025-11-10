@@ -2,12 +2,26 @@
 
 'use client';
 
-import { useState } from 'react';
-import { Tag, Plus, Edit, Trash2, Copy, Percent } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Tag, Plus, Edit, Trash2, Copy, Percent, DollarSign, Loader2, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { apiFetch } from '@/lib/api/httpClient';
+import { DiscountForm } from '@/components/admin/DiscountForm';
+import { useAlert } from '@/components/shared/ModalAlert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface Discount {
     id: number;
@@ -23,70 +37,78 @@ interface Discount {
     status: 'active' | 'expired' | 'scheduled';
 }
 
-const mockDiscounts: Discount[] = [
-    {
-        id: 1,
-        code: "WELCOME20",
-        description: "Welcome discount for new customers",
-        type: "percentage",
-        value: 20,
-        minPurchase: 100,
-        maxUses: 100,
-        currentUses: 45,
-        startDate: "2025-01-01",
-        endDate: "2025-12-31",
-        status: "active"
-    },
-    {
-        id: 2,
-        code: "FREESHIP",
-        description: "Free shipping on all orders",
-        type: "fixed",
-        value: 50,
-        minPurchase: 200,
-        currentUses: 128,
-        startDate: "2025-11-01",
-        endDate: "2025-11-30",
-        status: "active"
-    },
-    {
-        id: 3,
-        code: "BLACKFRIDAY",
-        description: "Black Friday mega sale",
-        type: "percentage",
-        value: 35,
-        maxUses: 500,
-        currentUses: 0,
-        startDate: "2025-11-29",
-        endDate: "2025-11-30",
-        status: "scheduled"
-    },
-    {
-        id: 4,
-        code: "SUMMER2024",
-        description: "Summer sale ended",
-        type: "percentage",
-        value: 25,
-        currentUses: 234,
-        startDate: "2024-06-01",
-        endDate: "2024-08-31",
-        status: "expired"
-    },
-];
+interface AdminDiscountsRawResponse {
+    discounts: Discount[];
+}
 
 export default function AdminDiscountsPage() {
-    const [discounts, setDiscounts] = useState<Discount[]>(mockDiscounts);
+    const queryClient = useQueryClient();
+    const { alert } = useAlert();
     const [searchTerm, setSearchTerm] = useState('');
+    const [isFormOpen, setIsFormOpen] = useState(false);
+    const [editingDiscount, setEditingDiscount] = useState<Discount | undefined>(undefined);
+    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+    const [discountToDelete, setDiscountToDelete] = useState<Discount | null>(null);
 
-    const filteredDiscounts = discounts.filter(discount => 
-        discount.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        discount.description.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    // Fetch Discounts (GET /api/admin/discounts)
+    const { data: rawData = { discounts: [] }, isLoading, isError } = useQuery<AdminDiscountsRawResponse, Error>({
+        queryKey: ['adminDiscounts'],
+        queryFn: () => apiFetch('/admin/discounts'),
+        staleTime: 1000 * 60,
+    });
+    
+    const discounts = rawData.discounts;
 
-    const stats = {
-        active: discounts.filter(d => d.status === 'active').length,
-        scheduled: discounts.filter(d => d.status === 'scheduled').length,
-        totalUses: discounts.reduce((sum, d) => sum + d.currentUses, 0),
+    // Delete Mutation (DELETE /api/admin/discounts/:id)
+    const deleteMutation = useMutation({
+        mutationFn: (id: number) => apiFetch(`/admin/discounts/${id}`, { method: 'DELETE' }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['adminDiscounts'] });
+            alert({ title: "Discount Deleted", message: "Coupon successfully revoked.", variant: 'success' });
+            setDeleteConfirmOpen(false);
+            setDiscountToDelete(null);
+        },
+        onError: (error: any) => {
+            alert({ title: "Delete Failed", message: error.message || "Could not delete coupon.", variant: 'error' });
+            setDeleteConfirmOpen(false);
+        },
+    });
+
+    const filteredDiscounts = useMemo(() => {
+        const term = searchTerm.toLowerCase();
+        return discounts.filter(discount => 
+            discount.code.toLowerCase().includes(term) ||
+            discount.description.toLowerCase().includes(term)
+        );
+    }, [discounts, searchTerm]);
+
+    const stats = useMemo(() => {
+        return {
+            active: discounts.filter(d => d.status === 'active').length,
+            scheduled: discounts.filter(d => d.status === 'scheduled').length,
+            totalUses: discounts.reduce((sum, d) => sum + d.currentUses, 0),
+        };
+    }, [discounts]);
+
+    const handleEdit = (discount: Discount) => {
+        setEditingDiscount(discount);
+        setIsFormOpen(true);
+    };
+
+    const handleNew = () => {
+        setEditingDiscount(undefined);
+        setIsFormOpen(true);
+    };
+    
+    const handleDelete = (discount: Discount) => {
+        setDiscountToDelete(discount);
+        setDeleteConfirmOpen(true);
+    };
+
+    const confirmDelete = () => {
+        if (discountToDelete) {
+            deleteMutation.mutate(discountToDelete.id);
+        }
     };
 
     const formatGHS = (amount: number) => 
@@ -101,10 +123,13 @@ export default function AdminDiscountsPage() {
         }
     };
 
-    const copyCode = (code: string) => {
-        navigator.clipboard.writeText(code);
-        alert(`Copied: ${code}`);
-    };
+    if (isLoading) return (
+        <div className="flex justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+    );
+    
+    if (isError) return <div className="text-red-500 p-4">Failed to load discount data.</div>;
 
     return (
         <div className="space-y-4 md:space-y-6">
@@ -113,7 +138,7 @@ export default function AdminDiscountsPage() {
                     <Tag className="w-6 h-6 md:w-8 md:h-8 mr-2 md:mr-3" /> 
                     Discounts & Coupons
                 </h1>
-                <Button size="sm" className="self-start sm:self-auto">
+                <Button size="sm" className="self-start sm:self-auto" onClick={handleNew}>
                     <Plus className="w-4 h-4 mr-2" />Create Coupon
                 </Button>
             </div>
@@ -174,7 +199,7 @@ export default function AdminDiscountsPage() {
                                             <Button 
                                                 variant="ghost" 
                                                 size="sm"
-                                                onClick={() => copyCode(discount.code)}
+                                                onClick={() => navigator.clipboard.writeText(discount.code)}
                                                 className="h-8"
                                             >
                                                 <Copy className="w-4 h-4" />
@@ -188,7 +213,10 @@ export default function AdminDiscountsPage() {
 
                                         <div className="flex flex-wrap gap-4 text-sm">
                                             <div className="flex items-center gap-1">
-                                                <Percent className="w-4 h-4 text-primary" />
+                                                {discount.type === 'percentage' 
+                                                    ? <Percent className="w-4 h-4 text-primary" />
+                                                    : <DollarSign className="w-4 h-4 text-primary" />
+                                                }
                                                 <span className="font-semibold">
                                                     {discount.type === 'percentage' 
                                                         ? `${discount.value}% OFF` 
@@ -196,17 +224,17 @@ export default function AdminDiscountsPage() {
                                                     }
                                                 </span>
                                             </div>
-                                            {discount.minPurchase && (
+                                            {discount.minPurchase && discount.minPurchase > 0 && (
                                                 <span className="text-gray-500">
                                                     • Min: {formatGHS(discount.minPurchase)}
                                                 </span>
                                             )}
-                                            {discount.maxUses && (
+                                            {discount.maxUses !== null && discount.maxUses !== undefined && (
                                                 <span className="text-gray-500">
                                                     • Uses: {discount.currentUses}/{discount.maxUses}
                                                 </span>
                                             )}
-                                            {!discount.maxUses && (
+                                            {(discount.maxUses === null || discount.maxUses === undefined) && (
                                                 <span className="text-gray-500">
                                                     • Uses: {discount.currentUses}
                                                 </span>
@@ -220,11 +248,22 @@ export default function AdminDiscountsPage() {
 
                                     {/* Right Section - Actions */}
                                     <div className="flex gap-2 lg:flex-col">
-                                        <Button variant="outline" size="sm" className="flex-1 lg:flex-none">
+                                        <Button 
+                                            variant="outline" 
+                                            size="sm" 
+                                            className="flex-1 lg:flex-none"
+                                            onClick={() => handleEdit(discount)}
+                                        >
                                             <Edit className="w-4 h-4 lg:mr-2" />
                                             <span className="hidden lg:inline">Edit</span>
                                         </Button>
-                                        <Button variant="outline" size="sm" className="flex-1 lg:flex-none text-red-600 hover:bg-red-50">
+                                        <Button 
+                                            variant="outline" 
+                                            size="sm" 
+                                            className="flex-1 lg:flex-none text-red-600 hover:bg-red-50"
+                                            onClick={() => handleDelete(discount)}
+                                            disabled={deleteMutation.isPending}
+                                        >
                                             <Trash2 className="w-4 h-4 lg:mr-2" />
                                             <span className="hidden lg:inline">Delete</span>
                                         </Button>
@@ -235,6 +274,43 @@ export default function AdminDiscountsPage() {
                     ))
                 )}
             </div>
+            
+            {/* Discount Form Dialog */}
+            <DiscountForm 
+                open={isFormOpen} 
+                onOpenChange={setIsFormOpen} 
+                currentDiscount={editingDiscount}
+            />
+
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to delete coupon code <strong>"{discountToDelete?.code}"</strong>? 
+                            This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={deleteMutation.isPending}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction 
+                            onClick={confirmDelete}
+                            disabled={deleteMutation.isPending}
+                            className="bg-red-600 hover:bg-red-700"
+                        >
+                            {deleteMutation.isPending ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Deleting...
+                                </>
+                            ) : (
+                                'Delete'
+                            )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

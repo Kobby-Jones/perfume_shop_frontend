@@ -2,13 +2,15 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { ListFilter, Loader2, ArrowUp, ArrowDown } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'next/navigation';
 
-import { getProducts, Product } from '@/lib/data/mock-products';
+import { Product } from '@/lib/data/mock-products'; // Keep for type definition
 import { ProductCard } from '@/components/product/ProductCard';
 import { FilterSidebar } from '@/components/product/FilterSidebar';
+import { apiFetch } from '@/lib/api/httpClient'; // Import API client
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -21,7 +23,38 @@ interface Filters {
   brands: string[];
   price: number[];
   sort: string;
+  search?: string;
+  category?: string; // Will come from URL params
 }
+
+// Global interface for the API response
+interface ProductListResponse {
+    products: Product[];
+    totalCount: number;
+}
+
+/**
+ * API fetch function with dynamic query parameters
+ */
+const fetchProducts = async (filters: Filters): Promise<ProductListResponse> => {
+    const params = new URLSearchParams();
+    
+    // Convert array filters to repeating parameters
+    filters.brands.forEach(brand => params.append('brand', brand));
+    
+    // Price range
+    params.append('minPrice', filters.price[0].toString());
+    params.append('maxPrice', filters.price[1].toString());
+
+    // Sort, Search, and Category
+    if (filters.sort) params.append('sort', filters.sort);
+    if (filters.search) params.append('search', filters.search);
+    if (filters.category) params.append('category', filters.category);
+
+    const data = await apiFetch(`/products?${params.toString()}`);
+    return data as ProductListResponse;
+};
+
 
 /**
  * Renders a loading skeleton layout for the product grid.
@@ -30,88 +63,86 @@ const ProductGridSkeleton = () => (
   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
     {[...Array(8)].map((_, i) => (
       // Aspect ratio matches the ProductCard
-      <Skeleton key={i} className="aspect-[3/4] w-full" />
+      <div key={i} className="aspect-[3/4] flex flex-col p-4 space-y-2 border rounded-lg">
+          {/* Image Placeholder */}
+          <Skeleton className="aspect-[3/4] w-full" />
+          {/* Title Placeholder */}
+          <Skeleton className="h-6 w-3/4" />
+          {/* Price Placeholder */}
+          <Skeleton className="h-4 w-1/2" />
+          {/* Button Placeholder */}
+          <Skeleton className="h-9 w-full mt-2" />
+        </div>
     ))}
   </div>
 );
 
 /**
  * Main Product Listing Page component.
- * Features: Filters (Price, Brand), Sorting, Responsive Grid, and Loading State.
  */
 export default function ShopPage() {
-  const [filters, setFilters] = useState<Filters>({
-    brands: [],
-    price: [0, 1000], // Default wide range
-    sort: 'name-asc', // Default sort
-  });
-
-  // Fetch product data using TanStack Query (React Query)
-  const { data: products = [], isLoading, isError } = useQuery<Product[]>({
-    queryKey: ['products'],
-    queryFn: getProducts,
-  });
-
-  /**
-   * Memoized function to apply filtering and sorting logic locally (simulating server-side filter).
-   */
-  const filteredAndSortedProducts = useMemo(() => {
-    let filtered = products.filter(product => {
-      // 1. Price Filter
-      const [minPrice, maxPrice] = filters.price;
-      const isPriceMatch = product.price >= minPrice && product.price <= maxPrice;
-
-      // 2. Brand Filter
-      const isBrandMatch = filters.brands.length === 0 || filters.brands.includes(product.brand);
-
-      return isPriceMatch && isBrandMatch;
+    const searchParams = useSearchParams();
+    
+    const [filters, setFilters] = useState<Filters>({
+      brands: [],
+      price: [0, 1000], 
+      sort: 'name-asc', 
+      category: searchParams.get('category') || undefined,
     });
+    
+    // Update category filter when URL changes
+    useEffect(() => {
+        const urlCategory = searchParams.get('category');
+        setFilters(prev => ({ 
+            ...prev, 
+            category: urlCategory || undefined 
+        }));
+    }, [searchParams]);
 
-    // Apply Sorting
-    filtered.sort((a, b) => {
-      switch (filters.sort) {
-        case 'price-asc':
-          return a.price - b.price;
-        case 'price-desc':
-          return b.price - a.price;
-        case 'name-asc':
-          return a.name.localeCompare(b.name);
-        case 'name-desc':
-          return b.name.localeCompare(a.name);
-        default:
-          return 0;
-      }
+
+    // Fetch product data using TanStack Query (React Query)
+    const { 
+        data: productsData, 
+        isLoading, 
+        isError,
+        refetch
+    } = useQuery<ProductListResponse>({
+        queryKey: ['products', filters],
+        queryFn: () => fetchProducts(filters),
     });
+    
+    const products = productsData?.products || [];
+    const totalResults = productsData?.totalCount || 0;
 
-    return filtered;
-  }, [products, filters]);
 
-  /**
-   * Updates the global filter state.
-   */
-  const handleFilterChange = (newFilters: Partial<Filters>) => {
-    setFilters(prev => ({ ...prev, ...newFilters }));
-  };
+    /**
+     * Updates the filter state and triggers a refetch.
+     */
+    const handleFilterChange = useCallback((newFilters: Partial<Filters>) => {
+        setFilters(prev => {
+            const updatedFilters = { ...prev, ...newFilters };
+            // Since filter changes update the queryKey, it automatically triggers a refetch.
+            return updatedFilters; 
+        });
+    }, []);
 
-  /**
-   * Updates the sorting selection.
-   */
-  const handleSortChange = (newSort: string) => {
-    setFilters(prev => ({ ...prev, sort: newSort }));
-  };
+    /**
+     * Updates the sorting selection.
+     */
+    const handleSortChange = useCallback((newSort: string) => {
+        handleFilterChange({ sort: newSort });
+    }, [handleFilterChange]);
 
   // --- Render Logic ---
   if (isError) {
     return <div className="container py-20 text-center text-red-600">Failed to load products. Please try again.</div>;
   }
   
-  const totalResults = filteredAndSortedProducts.length;
-
   return (
     <div className="container flex flex-col lg:flex-row gap-6 md:gap-10">
       
       {/* 1. Desktop Filter Sidebar / Mobile Filter Trigger */}
-      <FilterSidebar onFilterChange={(f) => handleFilterChange(f)} />
+      <FilterSidebar onFilterChange={handleFilterChange} />
 
       {/* 2. Product Content Area */}
       <div className="flex-1 min-w-0">
@@ -141,9 +172,9 @@ export default function ShopPage() {
         {/* Product Grid */}
         {isLoading ? (
           <ProductGridSkeleton />
-        ) : totalResults > 0 ? (
+        ) : products.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
-            {filteredAndSortedProducts.map(product => (
+            {products.map(product => (
               <ProductCard key={product.id} product={product} />
             ))}
           </div>

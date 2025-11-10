@@ -48,14 +48,22 @@ export function LoginForm() {
     setIsSubmitting(true);
 
     try {
-      // Call login from Auth context (integrated with backend API)
-      await login(data.email, data.password);
-      if (data.email === "admin@scentia.com") {
+      const response = await login(data.email, data.password);
+      
+      // The login function in useAuth now sets the user object, which includes the role.
+      // We rely on the internal state and the router logic handles the rest, but 
+      // for an immediate redirect based on the role known from the response:
+
+      // NOTE: We rely on the useAuth internal user state to determine the role
+      // For immediate redirection based on API response structure:
+      const userRole = (response as any)?.user?.role;
+      
+      if (userRole === "admin") {
         router.push('/admin');
-    } else {
+      } else {
         router.push('/account');
-    }
-      // Redirect on successful login
+      }
+
     } catch (err: any) {
       // Handle API or network errors
       setError(err.message || 'Login failed. Please check your credentials.');

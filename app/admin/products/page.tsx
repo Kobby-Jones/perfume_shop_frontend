@@ -6,12 +6,23 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Package, Plus, Loader2, Edit, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { apiFetch } from '@/lib/api/httpClient';
 import { useAlert } from '@/components/shared/ModalAlert';
 import { ProductForm } from '@/components/admin/ProductForm';
 import { Badge } from '@/components/ui/badge';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
+// Define the precise structure expected from the backend
 interface AdminProduct {
     id: number;
     name: string;
@@ -20,6 +31,7 @@ interface AdminProduct {
     availableStock: number;
     category: string;
     brand: string;
+    images: string[];
 }
 
 interface AdminProductsRawResponse {
@@ -36,25 +48,33 @@ export default function AdminProductsPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<AdminProduct | undefined>(undefined);
+    const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+    const [productToDelete, setProductToDelete] = useState<AdminProduct | null>(null);
 
+    // Fetch Products (GET /api/products)
     const { data: products = [], isLoading, isError } = useQuery<
         AdminProductsRawResponse,
         Error,
         AdminProductsFinalData
     >({
         queryKey: ['adminProducts'],
-        queryFn: () => apiFetch('/products?limit=1000'),
+        // Fetch all products (limit=999 to simulate no pagination for admin table)
+        queryFn: () => apiFetch('/products?limit=999'),
         select: (data) => data.products,
     });
 
+    // Delete Mutation (DELETE /api/admin/products/:id)
     const deleteMutation = useMutation({
         mutationFn: (id: number) => apiFetch(`/admin/products/${id}`, { method: 'DELETE' }),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['adminProducts'] });
             alert({ title: "Product Deleted", message: "Item successfully removed from catalog.", variant: 'success' });
+            setDeleteConfirmOpen(false);
+            setProductToDelete(null);
         },
         onError: (error: any) => {
             alert({ title: "Delete Failed", message: error.message || "Could not delete product.", variant: 'error' });
+            setDeleteConfirmOpen(false);
         },
     });
 
@@ -69,15 +89,22 @@ export default function AdminProductsPage() {
     };
     
     const handleDelete = (product: AdminProduct) => {
-        if (window.confirm(`Are you sure you want to delete "${product.name}"? This cannot be undone.`)) {
-            deleteMutation.mutate(product.id);
+        setProductToDelete(product);
+        setDeleteConfirmOpen(true);
+    };
+
+    const confirmDelete = () => {
+        if (productToDelete) {
+            deleteMutation.mutate(productToDelete.id);
         }
     };
 
-    const filteredProducts = products.filter(p => 
-        p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.brand.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredProducts = useMemo(() => {
+        return products.filter(p => 
+            p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.brand.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [products, searchTerm]);
 
     const formatGHS = (amount: number) => 
         new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS' }).format(amount);
@@ -109,64 +136,8 @@ export default function AdminProductsPage() {
                 className="w-full"
             />
 
-            {/* Mobile Card View */}
-            <div className="block lg:hidden space-y-3">
-                {filteredProducts.length === 0 ? (
-                    <div className="bg-white rounded-lg p-6 text-center text-gray-500">
-                        No products found.
-                    </div>
-                ) : (
-                    filteredProducts.map((product) => (
-                        <div 
-                            key={product.id} 
-                            className={`bg-white rounded-lg shadow-md p-4 space-y-3 ${
-                                product.availableStock < 5 ? 'border-l-4 border-yellow-500' : ''
-                            }`}
-                        >
-                            <div className="flex justify-between items-start">
-                                <div className="flex-1">
-                                    <p className="font-bold text-base">{product.name}</p>
-                                    <p className="text-sm text-gray-500">{product.brand}</p>
-                                    <Badge variant="outline" className="mt-1 text-xs">
-                                        {product.category}
-                                    </Badge>
-                                </div>
-                                <div className="text-right">
-                                    <p className="font-bold text-primary">{formatGHS(product.price * 14)}</p>
-                                    <p className={`text-sm font-bold mt-1 ${
-                                        product.availableStock < 5 ? 'text-red-600' : 'text-green-600'
-                                    }`}>
-                                        Stock: {product.availableStock}
-                                    </p>
-                                </div>
-                            </div>
-                            
-                            <div className="flex gap-2 pt-2 border-t">
-                                <Button 
-                                    variant="outline" 
-                                    size="sm" 
-                                    onClick={() => handleEdit(product)}
-                                    className="flex-1"
-                                >
-                                    <Edit className="w-4 h-4 mr-1" /> Edit
-                                </Button>
-                                <Button 
-                                    variant="outline" 
-                                    size="sm" 
-                                    onClick={() => handleDelete(product)}
-                                    disabled={deleteMutation.isPending}
-                                    className="flex-1 text-red-500 hover:text-red-700"
-                                >
-                                    <Trash2 className="w-4 h-4 mr-1" /> Delete
-                                </Button>
-                            </div>
-                        </div>
-                    ))
-                )}
-            </div>
-
             {/* Desktop Table View */}
-            <div className="hidden lg:block bg-white rounded-xl shadow-md overflow-x-auto">
+            <div className="bg-white rounded-xl shadow-md overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                         <tr>
@@ -183,7 +154,7 @@ export default function AdminProductsPage() {
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{p.id}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{p.name}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{p.category}</td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatGHS(p.price * 14)}</td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatGHS(p.price)}</td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-bold">
                                     <span className={p.availableStock < 5 ? 'text-red-600' : 'text-green-600'}>
                                         {p.availableStock}
@@ -209,11 +180,42 @@ export default function AdminProductsPage() {
                 </table>
             </div>
             
+            {/* Product Form Dialog */}
             <ProductForm 
                 open={isFormOpen} 
                 onOpenChange={setIsFormOpen} 
                 product={editingProduct}
             />
+
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to delete <strong>"{productToDelete?.name}"</strong>? 
+                            This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={deleteMutation.isPending}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction 
+                            onClick={confirmDelete}
+                            disabled={deleteMutation.isPending}
+                            className="bg-red-600 hover:bg-red-700"
+                        >
+                            {deleteMutation.isPending ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Deleting...
+                                </>
+                            ) : (
+                                'Delete'
+                            )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

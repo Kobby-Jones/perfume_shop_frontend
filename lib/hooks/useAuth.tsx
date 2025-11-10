@@ -2,15 +2,17 @@
 
 'use client';
 
-import { createContext, useContext, useState, useMemo, ReactNode, useEffect } from 'react';
+import { createContext, useContext, useState, useMemo, ReactNode, useEffect, useCallback } from 'react';
 import { apiFetch, setToken, removeToken, getToken } from '@/lib/api/httpClient';
+import { toast } from 'sonner';
 
-// Define the user type based on backend response
+// Define the user type based on backend response, including the role
 interface User {
   id: number;
   name: string;
   email: string;
-  createdAt?: string; // Add this optional property
+  role: 'user' | 'admin'; // <-- ADDED ROLE
+  createdAt?: string; 
 }
 interface AuthContextType {
   isLoggedIn: boolean;
@@ -19,104 +21,113 @@ interface AuthContextType {
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
   isLoading: boolean;
+  refetchUser: () => Promise<void>; // Added for manual refresh
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Define API URLs for reusability
+const API_URLS = {
+  ME: '/auth/me',
+  LOGIN: '/auth/login',
+  REGISTER: '/auth/register',
+  LOGOUT: '/auth/logout',
+};
+
 /**
  * Authentication Provider
- * Handles session management, login, registration, and logout with backend API.
+ * Handles session management, login, registration, and token validation with backend API.
  */
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isReady, setIsReady] = useState(false);
 
-  /**
-   * Initial load: check if token exists locally.
-   * If yes, mark as authenticated and set placeholder user data.
-   * In a real app, you should verify token validity via /auth/me.
-   */
-  useEffect(() => {
-    // Step 1: Retrieve stored token
+  // --- Core Session Verification ---
+  const refetchUser = useCallback(async () => {
     const token = getToken();
-
-    if (token) {
-      // If token exists, assume a valid session for now
-      setIsLoggedIn(true);
-      setUser({ id: 999, name: 'Guest User', email: 'verified@user.com' });
+    if (!token) {
+        setIsLoggedIn(false);
+        setUser(null);
+        setIsLoading(false);
+        return;
     }
 
-    // Step 2: Mark as finished loading after token check
-    setIsLoading(false);
-    setIsReady(true);
+    try {
+      // Validate token with the backend and fetch user details
+      const data = await apiFetch(API_URLS.ME);
+      
+      setIsLoggedIn(true);
+      setUser(data.user);
+    } catch (error) {
+      console.error('Session validation failed:', error);
+      // If validation fails, assume token is stale/expired
+      removeToken();
+      setIsLoggedIn(false);
+      setUser(null);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
-  /**
-   * Handles user login via backend API.
-   * On success, store the token and user info in local state.
-   */
+  // Initial load effect
+  useEffect(() => {
+    refetchUser();
+  }, [refetchUser]);
+
+  // --- Auth Actions ---
+  
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      const data = await apiFetch('/auth/login', {
+      const data = await apiFetch(API_URLS.LOGIN, {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       });
       
       setToken(data.token);
       setIsLoggedIn(true);
-      setUser(data.user); 
-      setIsLoading(false);
-
+      setUser(data.user);
       
     } catch (error) {
       setIsLoading(false);
       throw error; 
+    } finally {
+      setIsLoading(false);
     }
-};
+  };
 
-  /**
-   * Handles new user registration via backend API.
-   * Stores token and user info on success.
-   */
   const register = async (name: string, email: string, password: string) => {
     setIsLoading(true);
     try {
-      const data = await apiFetch('/auth/register', {
+      const data = await apiFetch(API_URLS.REGISTER, {
         method: 'POST',
         body: JSON.stringify({ name, email, password }),
       });
       
       setToken(data.token);
       setIsLoggedIn(true);
-      
-      // CRITICAL FIX: Set the user data from the registration response
       setUser(data.user); 
       
-      setIsLoading(false);
     } catch (error) {
       setIsLoading(false);
       throw error;
+    } finally {
+        setIsLoading(false);
     }
 };
 
-  /**
-   * Logs out the user by clearing token and local session state.
-   * Also attempts to notify backend for cleanup.
-   */
   const logout = () => {
-    apiFetch('/auth/logout', { method: 'POST' }).catch((err) =>
+    apiFetch(API_URLS.LOGOUT, { method: 'POST' }).catch((err) =>
       console.error('Logout API failed:', err)
     );
 
     removeToken();
     setIsLoggedIn(false);
     setUser(null);
+    toast.info("You have been signed out.");
   };
 
-  // Memoize context value to prevent unnecessary re-renders
   const value = useMemo(
     () => ({
       isLoggedIn,
@@ -125,18 +136,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       register,
       logout,
       isLoading,
-      isReady,
+      refetchUser,
     }),
-    [isLoggedIn, user, isLoading, isReady]
+    [isLoggedIn, user, isLoading, refetchUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-/**
- * Hook for accessing the authentication context.
- * Must be used within an AuthProvider.
- */
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {

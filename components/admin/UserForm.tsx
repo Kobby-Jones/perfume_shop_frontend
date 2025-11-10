@@ -10,8 +10,8 @@ import { Loader2 } from 'lucide-react';
 import React from 'react';
 
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { apiFetch } from '@/lib/api/httpClient';
@@ -34,6 +34,7 @@ interface UserFormProps {
 
 /**
  * Admin form for creating a new user and assigning their role.
+ * Communicates with POST /api/admin/users.
  */
 export function UserForm({ open, onOpenChange }: UserFormProps) {
   const queryClient = useQueryClient();
@@ -50,28 +51,41 @@ export function UserForm({ open, onOpenChange }: UserFormProps) {
   });
   
   React.useEffect(() => {
-    // Reset form errors when modal opens
+    // Reset form errors and values when modal opens
     if (open) {
-        form.reset();
+        form.reset({
+            name: '',
+            email: '',
+            password: '',
+            role: 'user',
+        });
         form.clearErrors();
     }
   }, [open, form]);
 
 
   const mutation = useMutation({
-    // This requires a new POST /api/admin/users endpoint
     mutationFn: (data: UserFormData) => {
-        // We use the register endpoint but modify it slightly for admin use if necessary.
-        // For simplicity, we create a new admin endpoint in the backend.
-        return apiFetch('/admin/users', { method: 'POST', body: JSON.stringify(data) });
+        return apiFetch('/admin/users', { 
+            method: 'POST', 
+            body: JSON.stringify(data) 
+        });
     },
     onSuccess: (data) => {
         queryClient.invalidateQueries({ queryKey: ['adminUsers'] });
         onOpenChange(false);
-        alert({ title: "User Created", message: `User ${form.getValues('email')} created successfully with role: ${form.getValues('role').toUpperCase()}.`, variant: 'success' });
+        alert({ 
+            title: "User Created", 
+            message: data.message || `User ${form.getValues('email')} created successfully with role: ${form.getValues('role').toUpperCase()}.`, 
+            variant: 'success' 
+        });
     },
     onError: (error: any) => {
-        alert({ title: "Creation Failed", message: error.message || "Could not create user account. Email may be taken.", variant: 'error' });
+        alert({ 
+            title: "Creation Failed", 
+            message: error.message || "Could not create user account. Email may be taken.", 
+            variant: 'error' 
+        });
     },
   });
 
@@ -92,21 +106,26 @@ export function UserForm({ open, onOpenChange }: UserFormProps) {
             <FormField control={form.control} name="name" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Full Name</FormLabel>
-                  <FormControl><Input {...field} /></FormControl>
+                  <FormControl><Input {...field} placeholder="John Doe" /></FormControl>
                   <FormMessage />
                 </FormItem>
             )} />
+            
             <FormField control={form.control} name="email" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Email Address</FormLabel>
-                  <FormControl><Input type="email" {...field} /></FormControl>
+                  <FormControl><Input type="email" {...field} placeholder="user@example.com" /></FormControl>
                   <FormMessage />
                 </FormItem>
             )} />
+            
             <FormField control={form.control} name="password" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Temporary Password</FormLabel>
-                  <FormControl><Input type="password" {...field} /></FormControl>
+                  <FormControl><Input type="password" {...field} placeholder="Min. 8 characters" /></FormControl>
+                  <FormDescription className="text-xs">
+                    User can change this password after first login
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
             )} />
@@ -115,7 +134,11 @@ export function UserForm({ open, onOpenChange }: UserFormProps) {
                 <FormItem>
                   <FormLabel>Account Role</FormLabel>
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl><SelectTrigger><SelectValue placeholder="Select Role" /></SelectTrigger></FormControl>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select Role" />
+                        </SelectTrigger>
+                      </FormControl>
                       <SelectContent>
                           <SelectItem value="user">User (Customer)</SelectItem>
                           <SelectItem value="admin">Admin (Staff)</SelectItem>
@@ -126,8 +149,20 @@ export function UserForm({ open, onOpenChange }: UserFormProps) {
             )} />
             
             <DialogFooter className="mt-6">
+                <DialogClose asChild>
+                    <Button type="button" variant="outline" disabled={mutation.isPending}>
+                      Cancel
+                    </Button>
+                </DialogClose>
                 <Button type="submit" disabled={mutation.isPending}>
-                    {mutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : 'Create Account'}
+                    {mutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      'Create Account'
+                    )}
                 </Button>
             </DialogFooter>
           </form>

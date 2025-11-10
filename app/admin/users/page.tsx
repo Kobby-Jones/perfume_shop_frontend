@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Users, Loader2, Mail, UserPlus, Trash2 } from 'lucide-react';
 import { apiFetch } from '@/lib/api/httpClient';
 import { Input } from '@/components/ui/input';
@@ -10,14 +10,26 @@ import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { UserForm } from '@/components/admin/UserForm';
+import { useAlert } from '@/components/shared/ModalAlert';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
+// Define the precise structure expected from the backend
 interface UserSummary {
   id: number;
   name: string;
   email: string;
   role: 'user' | 'admin';
-  registrationDate: string;
-  totalOrders: number;
+  createdAt: string;
+  totalOrders: number; 
 }
 
 interface AdminUsersRawResponse {
@@ -27,9 +39,14 @@ interface AdminUsersRawResponse {
 type AdminUsersFinalData = UserSummary[];
 
 export default function AdminUsersPage() {
+  const queryClient = useQueryClient();
+  const { alert } = useAlert();
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<UserSummary | null>(null);
 
+  // Fetch Users (GET /api/admin/users)
   const { data: allUsers = [], isLoading, isError } = useQuery<
     AdminUsersRawResponse,
     Error,
@@ -40,6 +57,22 @@ export default function AdminUsersPage() {
     select: (data) => data.users,
     staleTime: 1000 * 60 * 5,
   });
+
+  // Delete Mutation (DELETE /api/admin/users/:id)
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => apiFetch(`/admin/users/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adminUsers'] });
+      alert({ title: "User Deleted", message: "User account has been permanently removed.", variant: 'success' });
+      setDeleteConfirmOpen(false);
+      setUserToDelete(null);
+    },
+    onError: (error: any) => {
+      alert({ title: "Delete Failed", message: error.message || "Could not delete user.", variant: 'error' });
+      setDeleteConfirmOpen(false);
+    },
+  });
+
 
   const filteredUsers = useMemo(() => {
     if (!searchTerm) return allUsers;
@@ -53,10 +86,14 @@ export default function AdminUsersPage() {
 
   const handleAddUser = () => setIsFormOpen(true);
 
-  const handleDeleteUser = (userId: number) => {
-    if (window.confirm(`Permanently delete user ${userId}?`)) {
-      console.log(`Admin: Deleting user ${userId}`);
-      // TODO: Call Delete API + invalidate query
+  const handleDeleteUser = (user: UserSummary) => {
+    setUserToDelete(user);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (userToDelete) {
+      deleteMutation.mutate(userToDelete.id);
     }
   };
 
@@ -73,7 +110,7 @@ export default function AdminUsersPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-2xl md:text-3xl font-bold flex items-center">
           <Users className="w-6 h-6 md:w-8 md:h-8 mr-2 md:mr-3" /> 
-          <span>Users <span className="text-base md:text-xl">({allUsers.length})</span></span>
+          <span>Customers <span className="text-base md:text-xl">({allUsers.length})</span></span>
         </h1>
         <Button onClick={handleAddUser} size="sm" className="self-start sm:self-auto">
           <UserPlus className="w-4 h-4 md:w-5 md:h-5 mr-2" /> Add User
@@ -87,57 +124,12 @@ export default function AdminUsersPage() {
         className="w-full"
       />
 
-      {/* Mobile Card View */}
-      <div className="block lg:hidden space-y-3">
-        {filteredUsers.length === 0 ? (
-          <div className="bg-white rounded-lg p-6 text-center text-gray-500">
-            No users found matching filters.
-          </div>
-        ) : (
-          filteredUsers.map((user) => (
-            <div key={user.id} className="bg-white rounded-lg shadow-md p-4 space-y-3">
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <p className="font-bold text-base">{user.name}</p>
-                  <p className="text-sm text-gray-500 flex items-center mt-1">
-                    <Mail className="w-3 h-3 mr-1" />
-                    {user.email}
-                  </p>
-                  <div className="flex gap-2 mt-2">
-                    <Badge className={user.role === 'admin' ? 'bg-red-500' : 'bg-gray-500'}>
-                      {user.role.toUpperCase()}
-                    </Badge>
-                    <Badge variant="outline">
-                      {user.totalOrders} Orders
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="flex gap-2 pt-2 border-t">
-                <Button variant="outline" size="sm" className="flex-1">
-                  View
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => handleDeleteUser(user.id)}
-                  className="flex-1 text-red-500 hover:text-red-700"
-                >
-                  <Trash2 className="w-4 h-4 mr-1" /> Delete
-                </Button>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-
       {/* Desktop Table View */}
-      <div className="hidden lg:block bg-white rounded-xl shadow-md overflow-x-auto">
+      <div className="bg-white rounded-xl shadow-md overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
-              {['ID', 'Name', 'Email', 'Role', 'Orders', 'Actions'].map(header => (
+              {['ID', 'Name', 'Email', 'Role', 'Orders', 'Joined', 'Actions'].map(header => (
                 <th key={header} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   {header}
                 </th>
@@ -147,7 +139,7 @@ export default function AdminUsersPage() {
           <tbody className="bg-white divide-y divide-gray-200">
             {filteredUsers.length === 0 && (
               <tr>
-                <td colSpan={6} className="text-center py-6 text-gray-500">No users found matching filters.</td>
+                <td colSpan={7} className="text-center py-6 text-gray-500">No users found matching filters.</td>
               </tr>
             )}
 
@@ -164,13 +156,15 @@ export default function AdminUsersPage() {
                   </Badge>
                 </td>
                 <td className="px-6 py-4 text-sm font-bold text-gray-700">{u.totalOrders}</td>
+                <td className="px-6 py-4 text-sm text-gray-500">{new Date(u.createdAt).toLocaleDateString()}</td>
                 <td className="px-6 py-4 text-sm font-medium">
                   <Button variant="ghost" size="sm">View</Button>
                   <Button 
                     variant="ghost" 
                     size="sm" 
                     className="text-red-500" 
-                    onClick={() => handleDeleteUser(u.id)}
+                    onClick={() => handleDeleteUser(u)}
+                    disabled={deleteMutation.isPending}
                   >
                     Delete
                   </Button>
@@ -181,7 +175,38 @@ export default function AdminUsersPage() {
         </table>
       </div>
 
+      {/* User Form Dialog */}
       <UserForm open={isFormOpen} onOpenChange={setIsFormOpen} />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>"{userToDelete?.name}"</strong> ({userToDelete?.email})? 
+              This action cannot be undone and will permanently remove their account and all associated data.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDelete}
+              disabled={deleteMutation.isPending}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleteMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete User'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
