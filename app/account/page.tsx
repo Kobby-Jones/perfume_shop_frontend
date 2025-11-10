@@ -24,93 +24,206 @@ import {
   Star,
   Gift,
   Sparkles,
-  Bell
+  Bell,
+  Loader2
 } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { apiFetch } from '@/lib/api/httpClient';
+
+interface UserStats {
+  totalOrders: number;
+  totalSpent: number;
+  wishlistItems: number;
+  rewardPoints: number;
+  accountTier?: string;
+}
+
+interface RecentOrder {
+  id: number;
+  orderNumber?: string;
+  date: string; // Changed from createdAt to match backend
+  status: string;
+  total: number; // Changed from totalAmount to match backend
+  itemCount: number;
+}
+
+const fetchUserStats = async (): Promise<UserStats> => {
+  try {
+    // Fetch from multiple endpoints and aggregate
+    const [ordersData, wishlistData] = await Promise.allSettled([
+      apiFetch('/account/orders').catch(() => ({ orders: [] })),
+      apiFetch('/wishlist').catch(() => ({ items: [] })),
+    ]);
+
+    const ordersResult = ordersData.status === 'fulfilled' ? ordersData.value : null;
+    const orders = Array.isArray(ordersResult) ? ordersResult : (ordersResult?.orders || []);
+    
+    const wishlistResult = wishlistData.status === 'fulfilled' ? wishlistData.value : null;
+    const wishlist = Array.isArray(wishlistResult) ? wishlistResult : (wishlistResult?.items || []);
+
+    // Calculate stats from orders
+    const completedOrders = orders.filter((o: any) => 
+      ['completed', 'delivered'].includes(o.status?.toLowerCase())
+    );
+    
+    const totalSpent = completedOrders.reduce((sum: number, order: any) => 
+      sum + (order.total || order.totalAmount || 0), 0
+    );
+
+    // Calculate reward points (1 point per 10 GHS spent)
+    const rewardPoints = Math.floor(totalSpent / 10);
+
+    // Determine tier based on total spent
+    let accountTier = 'Bronze';
+    if (totalSpent > 5000) accountTier = 'Gold';
+    else if (totalSpent > 2000) accountTier = 'Silver';
+
+    return {
+      totalOrders: orders.length,
+      totalSpent: totalSpent,
+      wishlistItems: wishlist.length,
+      rewardPoints: rewardPoints,
+      accountTier: accountTier,
+    };
+  } catch (error) {
+    console.error('Failed to fetch user stats:', error);
+    return {
+      totalOrders: 0,
+      totalSpent: 0,
+      wishlistItems: 0,
+      rewardPoints: 0,
+      accountTier: 'Bronze',
+    };
+  }
+};
+
+const fetchRecentOrders = async (): Promise<RecentOrder[]> => {
+  try {
+    const data = await apiFetch('/account/orders');
+    console.log('Recent orders data:', data); // Debug log
+    
+    // Handle both array response and object with orders property
+    const orders = Array.isArray(data) ? data : (data?.orders || []);
+    
+    // Sort by date descending and take first 3
+    const sorted = orders
+      .filter((order: any) => order.date || order.createdAt) // Filter out orders without dates
+      .sort((a: any, b: any) => {
+        const dateA = new Date(a.date || a.createdAt).getTime();
+        const dateB = new Date(b.date || b.createdAt).getTime();
+        return dateB - dateA;
+      })
+      .slice(0, 3);
+
+    // Transform to match interface
+    return sorted.map((order: any) => ({
+      id: order.id,
+      orderNumber: order.orderNumber || `ORD-${order.id}`,
+      date: order.date || order.createdAt, // Support both field names
+      status: order.status,
+      total: order.total || order.totalAmount || 0,
+      itemCount: order.items?.length || order.itemCount || 0,
+    }));
+  } catch (error) {
+    console.error('Failed to fetch recent orders:', error);
+    return [];
+  }
+};
+
+const formatGHS = (amount: number) => {
+  if (isNaN(amount) || amount === null || amount === undefined) {
+    return 'GH₵0.00';
+  }
+  return new Intl.NumberFormat('en-GH', { 
+    style: 'currency', 
+    currency: 'GHS',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  }).format(amount);
+};
+
+const formatDate = (dateString: string) => {
+  try {
+    if (!dateString) {
+      return 'Date unavailable';
+    }
+    
+    const date = new Date(dateString);
+    
+    // Check if date is valid
+    if (isNaN(date.getTime())) {
+      console.warn('Invalid date:', dateString);
+      return 'Date unavailable';
+    }
+    
+    return new Intl.DateTimeFormat('en-US', { 
+      month: 'short', 
+      day: 'numeric',
+      year: 'numeric' 
+    }).format(date);
+  } catch (error) {
+    console.error('Error formatting date:', error, dateString);
+    return 'Date unavailable';
+  }
+};
+
+const getStatusColor = (status: string): string => {
+  const statusColors: Record<string, string> = {
+    delivered: 'bg-green-100 text-green-800 border-green-200',
+    shipped: 'bg-blue-100 text-blue-800 border-blue-200',
+    processing: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+    pending: 'bg-orange-100 text-orange-800 border-orange-200',
+    cancelled: 'bg-red-100 text-red-800 border-red-200',
+    completed: 'bg-green-100 text-green-800 border-green-200',
+  };
+  return statusColors[status.toLowerCase()] || 'bg-gray-100 text-gray-800 border-gray-200';
+};
+
+const getTierBadge = (tier?: string) => {
+  const tierConfig: Record<string, { color: string; label: string }> = {
+    gold: { color: 'bg-gradient-to-r from-amber-500 to-orange-500', label: 'Gold Member' },
+    silver: { color: 'bg-gradient-to-r from-gray-400 to-gray-500', label: 'Silver Member' },
+    bronze: { color: 'bg-gradient-to-r from-orange-600 to-orange-700', label: 'Bronze Member' },
+  };
+  const config = tierConfig[tier?.toLowerCase() || 'bronze'] || tierConfig.bronze;
+  return config;
+};
 
 /**
- * User Dashboard Overview Page with rich features and modern UI
+ * User Dashboard Overview Page with real API integration
  */
 export default function AccountDashboardPage() {
   const { user, isLoggedIn } = useAuth();
-  const [stats, setStats] = useState({
-    totalOrders: 0,
-    totalSpent: 0,
-    wishlistItems: 0,
-    rewardPoints: 0,
+
+  const { data: stats, isLoading: statsLoading } = useQuery<UserStats>({
+    queryKey: ['userStats'],
+    queryFn: fetchUserStats,
+    enabled: isLoggedIn,
+    staleTime: 1000 * 60 * 2, // Cache for 2 minutes
   });
-  const [recentOrders, setRecentOrders] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    // Fetch user stats and recent orders
-    const fetchDashboardData = async () => {
-      try {
-        // Replace with actual API calls
-        // const statsRes = await fetch('/api/user/stats');
-        // const ordersRes = await fetch('/api/user/orders/recent');
-        
-        // Mock data for now
-        setTimeout(() => {
-          setStats({
-            totalOrders: 12,
-            totalSpent: 1847.50,
-            wishlistItems: 8,
-            rewardPoints: 450,
-          });
-          
-          setRecentOrders([
-            {
-              id: 'ORD-1001',
-              date: '2024-11-05',
-              status: 'Delivered',
-              total: 189.50,
-              items: 3,
-              image: '/placeholder-perfume.jpg',
-            },
-            {
-              id: 'ORD-0998',
-              date: '2024-10-28',
-              status: 'Shipped',
-              total: 245.00,
-              items: 2,
-              image: '/placeholder-perfume.jpg',
-            },
-          ]);
-          
-          setIsLoading(false);
-        }, 500);
-      } catch (error) {
-        console.error('Error fetching dashboard data:', error);
-        setIsLoading(false);
-      }
-    };
-
-    if (isLoggedIn) {
-      fetchDashboardData();
-    }
-  }, [isLoggedIn]);
+  const { data: recentOrders, isLoading: ordersLoading } = useQuery<RecentOrder[]>({
+    queryKey: ['userRecentOrders'],
+    queryFn: fetchRecentOrders,
+    enabled: isLoggedIn,
+    staleTime: 1000 * 60 * 1, // Cache for 1 minute
+  });
 
   const userName = user?.name || 'Valued Customer';
   const userEmail = user?.email || '';
-  const memberSince = user?.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'October 2023';
+  const memberSince = user?.createdAt 
+    ? new Date(user.createdAt).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) 
+    : 'Recently';
 
+  const tierBadge = getTierBadge(stats?.accountTier);
+  const isLoading = statsLoading || ordersLoading;
 
-  const statusColors: Record<string, string> = {
-    Delivered: 'bg-green-100 text-green-800 border-green-200',
-    Shipped: 'bg-blue-100 text-blue-800 border-blue-200',
-    Processing: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-    Cancelled: 'bg-red-100 text-red-800 border-red-200',
-  };
-
-  if (isLoading) {
+  if (isLoading && !stats) {
     return (
       <AccountLayout>
-        <div className="space-y-6">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-32 bg-muted animate-pulse rounded-lg" />
-          ))}
+        <div className="flex justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
         </div>
       </AccountLayout>
     );
@@ -139,9 +252,9 @@ export default function AccountDashboardPage() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between mb-2">
               <Package className="h-8 w-8 text-purple-600" />
-              <TrendingUp className="h-4 w-4 text-green-600" />
+              {(stats?.totalOrders ?? 0) > 0 && <TrendingUp className="h-4 w-4 text-green-600" />}
             </div>
-            <p className="text-2xl font-bold">{stats.totalOrders}</p>
+            <p className="text-2xl font-bold">{stats?.totalOrders ?? 0}</p>
             <p className="text-sm text-muted-foreground">Total Orders</p>
           </CardContent>
         </Card>
@@ -151,9 +264,9 @@ export default function AccountDashboardPage() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between mb-2">
               <CreditCard className="h-8 w-8 text-blue-600" />
-              <Sparkles className="h-4 w-4 text-yellow-600" />
+              {(stats?.totalSpent ?? 0) > 0 && <Sparkles className="h-4 w-4 text-yellow-600" />}
             </div>
-            <p className="text-2xl font-bold">GHS {stats.totalSpent.toFixed(2)}</p>
+            <p className="text-2xl font-bold">{formatGHS(stats?.totalSpent ?? 0)}</p>
             <p className="text-sm text-muted-foreground">Total Spent</p>
           </CardContent>
         </Card>
@@ -163,9 +276,11 @@ export default function AccountDashboardPage() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between mb-2">
               <Heart className="h-8 w-8 text-red-600" />
-              <Badge variant="secondary">{stats.wishlistItems}</Badge>
+              {(stats?.wishlistItems ?? 0) > 0 && (
+                <Badge variant="secondary">{stats?.wishlistItems}</Badge>
+              )}
             </div>
-            <p className="text-2xl font-bold">{stats.wishlistItems}</p>
+            <p className="text-2xl font-bold">{stats?.wishlistItems ?? 0}</p>
             <p className="text-sm text-muted-foreground">Wishlist Items</p>
           </CardContent>
         </Card>
@@ -175,9 +290,9 @@ export default function AccountDashboardPage() {
           <CardContent className="pt-6">
             <div className="flex items-center justify-between mb-2">
               <Award className="h-8 w-8 text-amber-600" />
-              <Gift className="h-4 w-4 text-green-600" />
+              {(stats?.rewardPoints ?? 0) > 0 && <Gift className="h-4 w-4 text-green-600" />}
             </div>
-            <p className="text-2xl font-bold">{stats.rewardPoints}</p>
+            <p className="text-2xl font-bold">{stats?.rewardPoints ?? 0}</p>
             <p className="text-sm text-muted-foreground">Reward Points</p>
           </CardContent>
         </Card>
@@ -217,8 +332,8 @@ export default function AccountDashboardPage() {
                 <Star className="h-5 w-5 text-amber-500 mt-0.5" />
                 <div>
                   <p className="text-sm text-muted-foreground">Account Tier</p>
-                  <Badge className="mt-1 bg-gradient-to-r from-amber-500 to-orange-500">
-                    Gold Member
+                  <Badge className={`mt-1 ${tierBadge.color} text-white`}>
+                    {tierBadge.label}
                   </Badge>
                 </div>
               </div>
@@ -257,7 +372,11 @@ export default function AccountDashboardPage() {
             </div>
           </CardHeader>
           <CardContent>
-            {recentOrders.length === 0 ? (
+            {ordersLoading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+              </div>
+            ) : !recentOrders || recentOrders.length === 0 ? (
               <div className="text-center py-8">
                 <Package className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
                 <p className="text-muted-foreground mb-4">No orders yet</p>
@@ -275,24 +394,20 @@ export default function AccountDashboardPage() {
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <p className="font-semibold">Order #{order.id}</p>
-                          <Badge className={`${statusColors[order.status]} border`}>
+                          <p className="font-semibold">Order #{order.orderNumber || order.id}</p>
+                          <Badge className={`${getStatusColor(order.status)} border`}>
                             {order.status}
                           </Badge>
                         </div>
                         <div className="flex items-center gap-4 text-sm text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <Clock className="h-3 w-3" />
-                            {new Date(order.date).toLocaleDateString('en-US', { 
-                              month: 'short', 
-                              day: 'numeric',
-                              year: 'numeric' 
-                            })}
+                            {formatDate(order.date)}
                           </span>
-                          <span>{order.items} items</span>
+                          <span>{order.itemCount} {order.itemCount === 1 ? 'item' : 'items'}</span>
                         </div>
                       </div>
-                      <p className="text-lg font-bold">GHS {order.total.toFixed(2)}</p>
+                      <p className="text-lg font-bold">{formatGHS(order.total)}</p>
                     </div>
 
                     <div className="flex items-center justify-between pt-3 border-t">
@@ -302,12 +417,12 @@ export default function AccountDashboardPage() {
                           <ChevronRight className="h-3 w-3" />
                         </Button>
                       </Link>
-                      {order.status === 'Delivered' && (
+                      {order.status.toLowerCase() === 'delivered' && (
                         <Button variant="ghost" size="sm">
                           Buy Again
                         </Button>
                       )}
-                      {order.status === 'Shipped' && (
+                      {order.status.toLowerCase() === 'shipped' && (
                         <Button variant="ghost" size="sm">
                           Track Order
                         </Button>
@@ -322,27 +437,29 @@ export default function AccountDashboardPage() {
       </div>
 
       {/* Promotional Banner */}
-      <Card className="mt-6 border-0 bg-gradient-to-r from-primary via-primary/90 to-primary/80 text-white overflow-hidden">
-        <CardContent className="py-8 relative">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32"></div>
-          <div className="relative z-10 max-w-2xl">
-            <div className="flex items-center gap-2 mb-2">
-              <Gift className="h-6 w-6" />
-              <Badge variant="secondary" className="bg-white/20 text-white border-white/30">
-                Exclusive Offer
-              </Badge>
+      {(stats?.rewardPoints ?? 0) > 0 && (
+        <Card className="mt-6 border-0 bg-gradient-to-r from-primary via-primary/90 to-primary/80 text-white overflow-hidden">
+          <CardContent className="py-8 relative">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32"></div>
+            <div className="relative z-10 max-w-2xl">
+              <div className="flex items-center gap-2 mb-2">
+                <Gift className="h-6 w-6" />
+                <Badge variant="secondary" className="bg-white/20 text-white border-white/30">
+                  Exclusive Offer
+                </Badge>
+              </div>
+              <h3 className="text-2xl font-bold mb-2">Redeem Your Reward Points!</h3>
+              <p className="mb-4 text-white/90">
+                You have {stats?.rewardPoints} points. Use them to get exclusive discounts on your next purchase.
+              </p>
+              <Button variant="secondary" className="bg-white text-primary hover:bg-white/90">
+                Explore Rewards
+                <ChevronRight className="ml-2 h-4 w-4" />
+              </Button>
             </div>
-            <h3 className="text-2xl font-bold mb-2">Redeem Your Reward Points!</h3>
-            <p className="mb-4 text-white/90">
-              You have {stats.rewardPoints} points. Use them to get exclusive discounts on your next purchase.
-            </p>
-            <Button variant="secondary" className="bg-white text-primary hover:bg-white/90">
-              Explore Rewards
-              <ChevronRight className="ml-2 h-4 w-4" />
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
     </AccountLayout>
   );
 }

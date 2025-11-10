@@ -14,17 +14,35 @@ import { apiFetch } from '@/lib/api/httpClient';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
 
-// Define the Order Detail type expected from the backend
+// Define the Order Detail type to match actual backend response
+interface OrderItem {
+    product: {
+        name: string;
+        price: number;
+    };
+    quantity: number;
+    subtotal: number;
+}
+
+interface ShippingAddress {
+    street: string;
+    city: string;
+    zip: string;
+    country: string;
+    firstName: string;
+    lastName: string;
+}
+
 interface OrderDetail {
     id: number;
-    createdAt: string; // Use createdAt from Prisma
+    date: string; // Backend uses 'date' not 'createdAt'
     status: 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled' | 'Pending';
-    paymentStatus: 'pending' | 'success' | 'failed';
-    items: { productId: number; name: string; price: number; quantity: number }[];
-    shippingAddress: { street: string, city: string, zip: string, country: string };
+    items: OrderItem[];
+    shippingAddress: ShippingAddress;
     shippingCost: number;
-    taxAmount: number; // Matches the backend schema
-    orderTotal: number; // Matches the backend schema
+    tax: number; // Backend uses 'tax' not 'taxAmount'
+    total: number; // Backend uses 'total' not 'orderTotal'
+    paymentStatus?: 'pending' | 'success' | 'failed'; // Optional since backend might not return it
 }
 
 /**
@@ -47,7 +65,6 @@ const getStatusProps = (status: OrderDetail['status']) => {
     }
 };
 
-
 /**
  * Renders the detailed view of a single order.
  */
@@ -55,13 +72,21 @@ export default function OrderDetailPage() {
     const params = useParams();
     const orderId = parseInt(params.id as string);
 
-    const formatGHS = (amount: number) => 
-        new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS' }).format(amount);
+    const formatGHS = (amount: number) => {
+        if (isNaN(amount) || amount === null || amount === undefined) {
+            return 'GH₵0.00';
+        }
+        return new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS' }).format(amount);
+    };
 
     // Fetch order details
     const { data: order, isLoading, isError } = useQuery<OrderDetail>({
         queryKey: ['order', orderId],
-        queryFn: () => apiFetch(`/account/orders/${orderId}`), // GET /api/account/orders/:id
+        queryFn: async () => {
+            const data = await apiFetch(`/account/orders/${orderId}`);
+            console.log('Fetched order data:', data);
+            return data;
+        },
         enabled: !isNaN(orderId),
     });
 
@@ -75,30 +100,49 @@ export default function OrderDetailPage() {
     
     if (isError || !order) {
         return (
-                <div className="text-center py-10 text-red-600">
-                    <Frown className="w-8 h-8 mx-auto mb-3" />
-                    <p className="text-xl font-semibold">Order #{orderId} Not Found</p>
-                    <p className="text-foreground/70">The order ID is invalid or access is denied.</p>
-                </div>
+            <div className="text-center py-10 text-red-600">
+                <Frown className="w-8 h-8 mx-auto mb-3" />
+                <p className="text-xl font-semibold">Order #{orderId} Not Found</p>
+                <p className="text-foreground/70">The order ID is invalid or access is denied.</p>
+            </div>
         );
     }
     
-    // --- Render Logic ---
+    // --- Data Processing ---
     const { icon: StatusIcon, color: statusColorClass, badgeColor } = getStatusProps(order.status);
 
-    const subtotal = order.orderTotal - order.shippingCost - order.taxAmount;
+    // Use the correct field names from backend
+    const orderTotal = order.total || 0;
+    const shippingCost = order.shippingCost || 0;
+    const taxAmount = order.tax || 0;
+    const subtotal = orderTotal - shippingCost - taxAmount;
     
-    // Convert JSON shipping address back to object structure
-    const shippingAddress = order.shippingAddress as { 
-        street: string; 
-        city: string; 
-        zip: string; 
-        country: string;
-        firstName: string;
-        lastName: string;
-    };
+    const shippingAddress = order.shippingAddress;
     
+    // Payment status might not be in the response, default to pending
     const isPaymentSuccess = order.paymentStatus === 'success';
+
+    // Safe date formatting
+    const formatDate = (date: string): string => {
+        try {
+            const dateObj = new Date(date);
+            if (isNaN(dateObj.getTime())) {
+                return 'Date unavailable';
+            }
+            return dateObj.toLocaleDateString('en-GB', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        } catch (e) {
+            return 'Date unavailable';
+        }
+    };
+
+    // Calculate tax percentage safely
+    const taxPercentage = (subtotal + shippingCost) > 0 
+        ? ((taxAmount / (subtotal + shippingCost)) * 100).toFixed(1)
+        : '0';
 
     return (
         <>
@@ -112,37 +156,49 @@ export default function OrderDetailPage() {
                             <StatusIcon className="w-6 h-6 inline mr-2"/>
                             {order.status}
                         </CardTitle>
-                        <CardDescription className="text-sm">
-                            Payment: 
-                            <span className={cn(
-                                "font-semibold ml-1",
-                                isPaymentSuccess ? "text-green-700" : "text-red-700"
-                            )}>
-                                {isPaymentSuccess ? 'Confirmed' : 'Pending/Failed'}
-                            </span>
-                        </CardDescription>
+                        {order.paymentStatus && (
+                            <CardDescription className="text-sm">
+                                Payment: 
+                                <span className={cn(
+                                    "font-semibold ml-1",
+                                    isPaymentSuccess ? "text-green-700" : "text-red-700"
+                                )}>
+                                    {isPaymentSuccess ? 'Confirmed' : 'Pending/Failed'}
+                                </span>
+                            </CardDescription>
+                        )}
                     </CardHeader>
                     <CardContent>
                         <p className="text-sm font-medium flex items-center">
-                            <Calendar className="w-4 h-4 mr-2" /> Placed: {new Date(order.createdAt).toLocaleDateString()}
+                            <Calendar className="w-4 h-4 mr-2" /> Placed: {formatDate(order.date)}
                         </p>
                     </CardContent>
                 </Card>
 
                 {/* Shipping Address Card */}
                 <Card className="md:col-span-1">
-                    <CardHeader><CardTitle className="text-lg flex items-center gap-2"><MapPin className="w-4 h-4"/>Shipping Address</CardTitle></CardHeader>
+                    <CardHeader>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                            <MapPin className="w-4 h-4"/>Shipping Address
+                        </CardTitle>
+                    </CardHeader>
                     <CardContent className="text-sm space-y-1">
-                        <p className="font-semibold">{shippingAddress.firstName} {shippingAddress.lastName}</p>
+                        <p className="font-semibold">
+                            {shippingAddress.firstName} {shippingAddress.lastName}
+                        </p>
                         <p>{shippingAddress.street}</p>
-                        <p>{shippingAddress.city}, {shippingAddress.zip}</p>
+                        <p>{shippingAddress.city}{shippingAddress.zip ? `, ${shippingAddress.zip}` : ''}</p>
                         <p>{shippingAddress.country}</p>
                     </CardContent>
                 </Card>
 
                 {/* Financial Summary Card */}
                 <Card className="md:col-span-1">
-                    <CardHeader><CardTitle className="text-lg flex items-center gap-2"><DollarSign className="w-4 h-4"/>Order Total</CardTitle></CardHeader>
+                    <CardHeader>
+                        <CardTitle className="text-lg flex items-center gap-2">
+                            <DollarSign className="w-4 h-4"/>Order Total
+                        </CardTitle>
+                    </CardHeader>
                     <CardContent className="text-sm space-y-1">
                         <div className="flex justify-between">
                             <p>Subtotal:</p>
@@ -150,16 +206,16 @@ export default function OrderDetailPage() {
                         </div>
                         <div className="flex justify-between">
                             <p>Shipping:</p>
-                            <p>{formatGHS(order.shippingCost)}</p>
+                            <p>{formatGHS(shippingCost)}</p>
                         </div>
                         <div className="flex justify-between">
-                            <p>Tax ({order.taxAmount / (subtotal + order.shippingCost) * 100}%):</p>
-                            <p>{formatGHS(order.taxAmount)}</p>
+                            <p>Tax ({taxPercentage}%):</p>
+                            <p>{formatGHS(taxAmount)}</p>
                         </div>
                         <Separator className="my-2" />
                         <div className="flex justify-between text-xl font-bold text-primary">
                             <p>Total:</p>
-                            <p>{formatGHS(order.orderTotal)}</p>
+                            <p>{formatGHS(orderTotal)}</p>
                         </div>
                     </CardContent>
                 </Card>
@@ -168,28 +224,41 @@ export default function OrderDetailPage() {
             {/* Itemized List */}
             <Card className="shadow-lg">
                 <CardHeader>
-                    <CardTitle>Items Ordered ({order.items.length})</CardTitle>
+                    <CardTitle>Items Ordered ({order.items?.length || 0})</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <div className="space-y-4">
-                        {order.items.map((item, index) => (
-                            // The backend returns an array of OrderItem, which includes name, price, quantity
-                            <div key={index} className="flex justify-between items-center border-b pb-3">
-                                <div className="flex flex-col">
-                                    <span className="font-semibold">{item.name}</span>
-                                    <span className="text-sm text-foreground/70">{formatGHS(item.price)} x {item.quantity}</span>
-                                </div>
-                                <span className="font-bold">{formatGHS(item.price * item.quantity)}</span>
-                            </div>
-                        ))}
-                    </div>
+                    {order.items && order.items.length > 0 ? (
+                        <div className="space-y-4">
+                            {order.items.map((item, index) => {
+                                const itemPrice = item.product.price || 0;
+                                const itemQuantity = item.quantity || 0;
+                                const itemTotal = item.subtotal || (itemPrice * itemQuantity);
+                                
+                                return (
+                                    <div key={index} className="flex justify-between items-center border-b pb-3 last:border-b-0">
+                                        <div className="flex flex-col">
+                                            <span className="font-semibold">{item.product.name || 'Unnamed Item'}</span>
+                                            <span className="text-sm text-foreground/70">
+                                                {formatGHS(itemPrice)} x {itemQuantity}
+                                            </span>
+                                        </div>
+                                        <span className="font-bold">{formatGHS(itemTotal)}</span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <p className="text-center text-foreground/70 py-4">No items found</p>
+                    )}
                 </CardContent>
             </Card>
 
             <div className="flex justify-end mt-6 space-x-3">
                 <Button variant="outline">Print Invoice</Button>
-                {order.status === 'Delivered' && (
-                    <Link href={`/product/${order.items[0].productId}`}><Button>Leave Feedback</Button></Link>
+                {order.status === 'Delivered' && order.items && order.items.length > 0 && (
+                    <Link href={`/product/${order.items[0].product.name}`}>
+                        <Button>Leave Feedback</Button>
+                    </Link>
                 )}
             </div>
         </>

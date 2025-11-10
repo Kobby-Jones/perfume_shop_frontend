@@ -212,7 +212,7 @@ export default function AdminInventoryPage() {
                                     <div>
                                         <p className="text-gray-500">Value</p>
                                         <p className="font-bold text-primary">
-                                            {formatGHS(product.availableStock * product.price * 14)}
+                                            {formatGHS(product.availableStock * product.price)}
                                         </p>
                                     </div>
                                 </div>
