@@ -10,6 +10,7 @@ import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useRouter } from 'next/navigation';
 
 // Define the precise structure expected from the backend
 interface AdminOrderSummary {
@@ -34,6 +35,7 @@ type AdminOrdersFinalData = AdminOrderSummary[];
 const ALL_STATUSES = ['All', 'Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled'];
 
 export default function AdminOrdersPage() {
+    const router = useRouter();
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<string>('All');
 
@@ -94,6 +96,10 @@ export default function AdminOrdersPage() {
             case 'Cancelled': return 'bg-red-200 text-red-800';
             default: return 'bg-gray-200 text-gray-800';
         }
+    };
+
+    const handleViewOrder = (orderId: number) => {
+        router.push(`/admin/orders/${orderId}`);
     };
 
     if (isLoading) return (
@@ -169,7 +175,15 @@ export default function AdminOrdersPage() {
                                     <Badge className={getStatusColor(o.status)}>{o.status}</Badge>
                                 </td>
                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                    <Button variant="ghost" size="sm" className="text-blue-500">
+                                    {/* <Button variant="ghost" size="sm" className="text-blue-500">
+                                        View <ArrowRight className="w-3 h-3 ml-1" />
+                                    </Button> */}
+                                    <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        className="text-blue-500"
+                                        onClick={() => handleViewOrder(o.id)}
+                                    >
                                         View <ArrowRight className="w-3 h-3 ml-1" />
                                     </Button>
                                     {/* TODO: Add logic to update order status here */}
