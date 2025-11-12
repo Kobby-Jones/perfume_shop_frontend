@@ -12,7 +12,7 @@ import {
   ShoppingBag,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'; // Added useQuery
 import { toast } from 'sonner';
 import { useCart } from '@/lib/hooks/useCart';
 import { apiFetch } from '@/lib/api/httpClient';
@@ -34,9 +34,8 @@ const checkoutSteps = [
 interface CheckoutData {
   address: any | null;
   shippingOption: 'standard' | 'express';
-  // Include discount info
   discountCode: string | null;
-  discountValue: number; // Fixed amount deducted
+  discountAmount: number; // Stored from the secure calculation response
 }
 
 interface OrderCreationResponse {
@@ -47,67 +46,71 @@ interface OrderCreationResponse {
   paymentReference: string;
 }
 
+// Interface for the secure totals fetched from the backend
+interface SecureTotals {
+  subtotal: number; // Original raw subtotal
+  shipping: number;
+  tax: number;
+  discountAmount: number;
+  grandTotal: number;
+  discountCode?: string;
+}
+
+
 function CheckoutPageContent() {
-  const { cartDetails, totals, isLoading: isCartLoading, cartTotal, refetchCart } = useCart();
+  const { cartDetails, rawCartSubtotal, totals: initialTotals, isLoading: isCartLoading, refetchCart } = useCart();
   const queryClient = useQueryClient();
-
-  // Calculate taxes and shipping based on selected option (live data from totals)
-  const calculateFinalTotals = (shippingOption: 'standard' | 'express') => {
-      // NOTE: We rely on the backend totals based on standard shipping for the initial load.
-      // For accurate live calculation, we would need a dedicated /cart/calculate endpoint that accepts shippingOption/discount.
-      // Since we don't have that dedicated endpoint, we'll manually recalculate based on the cart subtotal and fixed rates, 
-      // matching the cart controller logic (if deployed correctly).
-      
-      const subtotal = totals?.subtotal || 0;
-      const FREE_SHIPPING_THRESHOLD = 100.00;
-      const TAX_RATE = 0.08;
-      const SHIPPING_STANDARD_COST = 15.00;
-      const SHIPPING_EXPRESS_COST = 25.00;
-
-      let shippingCost: number;
-      if (shippingOption === 'express') {
-          shippingCost = SHIPPING_EXPRESS_COST;
-      } else {
-          shippingCost = subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_STANDARD_COST;
-      }
-
-      const rawTotal = subtotal + shippingCost;
-      const tax = rawTotal * TAX_RATE;
-      const grandTotal = rawTotal + tax;
-
-      return { subtotal, shippingCost, tax, grandTotal };
-  };
-  
-  const initialTotals = calculateFinalTotals('standard');
 
   const [currentStep, setCurrentStep] = useState(1);
   const [checkoutData, setCheckoutData] = useState<CheckoutData>({
     address: null,
     shippingOption: 'standard',
     discountCode: null,
-    discountValue: 0,
+    discountAmount: 0,
   });
   
-  // Update totals dynamically when shipping option changes
-  const { subtotal, shippingCost, tax, grandTotal } = useMemo(() => {
-      return calculateFinalTotals(checkoutData.shippingOption);
-  }, [checkoutData.shippingOption, cartTotal]);
+  // --- 1. Fetch Secure Totals from Backend ---
+  const { data: secureTotals, isLoading: isTotalsLoading } = useQuery<SecureTotals>({
+      queryKey: ['checkoutTotals', checkoutData.shippingOption, checkoutData.discountCode],
+      queryFn: () => apiFetch('/cart/calculate', {
+          method: 'POST',
+          body: JSON.stringify({
+              shippingOption: checkoutData.shippingOption,
+              discountCode: checkoutData.discountCode,
+          }),
+      }),
+      // Only enabled if cart is not loading and we are authenticated (handled by AuthGuard/useCart)
+      enabled: !isCartLoading && rawCartSubtotal > 0, 
+      staleTime: 0, // Ensure fresh calculations
+  });
 
-  // Handle discount application in summary card
-  const handleDiscountApplied = (discount: any | null) => {
-    if (discount) {
+  // Safely get the current, definitive totals
+  const subtotal = initialTotals?.subtotal ?? 0;
+  const shippingCost = secureTotals?.shipping ?? 0;
+  const tax = secureTotals?.tax ?? 0;
+  const grandTotal = secureTotals?.grandTotal ?? subtotal + shippingCost + tax;
+  const discountAmount = secureTotals?.discountAmount ?? 0;
+  
+  // Set the secure discount amount to local state whenever the query finishes
+  useEffect(() => {
+    if (secureTotals) {
         setCheckoutData(prev => ({
             ...prev,
-            discountCode: discount.code,
-            discountValue: discount.value,
-        }));
-    } else {
-        setCheckoutData(prev => ({
-            ...prev,
-            discountCode: null,
-            discountValue: 0,
+            discountAmount: secureTotals.discountAmount,
+            discountCode: secureTotals.discountCode || null
         }));
     }
+  }, [secureTotals]);
+
+
+  // Handle discount application from summary card
+  const handleDiscountApplied = (discount: any | null) => {
+    // This action only sets the CODE on the client; the secureTotals query handles the calculation.
+    setCheckoutData(prev => ({
+        ...prev,
+        discountCode: discount ? discount.code : null,
+        // discountAmount will be updated by the successful secureTotals query
+    }));
   };
 
   
@@ -116,17 +119,17 @@ function CheckoutPageContent() {
 
   const cartIsEmpty = cartDetails.length === 0;
 
-  // --- Step 1: Create Order Mutation (Live) ---
+  // --- 2. Create Order Mutation (Live) ---
   const createOrderMutation = useMutation({
     mutationFn: async () => {
-      if (!checkoutData.address || !checkoutData.shippingOption) {
-          throw new Error('Missing address or shipping details.');
+      if (!checkoutData.address || !checkoutData.shippingOption || grandTotal <= 0) {
+          throw new Error('Missing details or zero order total.');
       }
       
       const payload = {
         shippingAddress: checkoutData.address,
         shippingOption: checkoutData.shippingOption,
-        discountCode: checkoutData.discountCode, // Pass discount code to backend
+        discountCode: checkoutData.discountCode, // Server re-validates and applies this
       };
       
       const response = await apiFetch('/checkout/order', {
@@ -146,7 +149,7 @@ function CheckoutPageContent() {
     },
   });
 
-  // --- Step 2: Verify Payment Mutation (Live) ---
+  // --- 3. Verify Payment Mutation (Live) ---
   const verifyPaymentMutation = useMutation({
     mutationFn: async (reference: string) => {
       if (!orderInfo) throw new Error('No order information available');
@@ -160,11 +163,9 @@ function CheckoutPageContent() {
       });
     },
     onSuccess: () => {
-      // Invalidate cart query to refresh the empty cart
       queryClient.invalidateQueries({ queryKey: ['cart'] });
-      // Clear address cache (as it might be used during checkout, though less critical)
+      queryClient.invalidateQueries({ queryKey: ['checkoutTotals'] });
       queryClient.invalidateQueries({ queryKey: ['userAddresses'] }); 
-      // Update cart state locally immediately after successful clearance, then move to success step
       refetchCart();
       
       toast.success('Payment verified! Your order is confirmed.');
@@ -192,7 +193,9 @@ function CheckoutPageContent() {
   const nextStepHandler = () => setCurrentStep((prev) => Math.min(prev + 1, 3));
   const prevStepHandler = () => setCurrentStep((prev) => Math.max(prev - 1, 1));
 
-  if (isCartLoading) {
+  const isGloballyLoading = isCartLoading || isTotalsLoading;
+
+  if (isGloballyLoading) {
     return (
       <div className="container py-20 text-center">
         <Skeleton className="h-40 w-full" />
@@ -218,28 +221,8 @@ function CheckoutPageContent() {
     );
   }
 
-  if (currentStep === 4) {
-    return (
-      <div className="container py-20 text-center">
-        <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-6" />
-        <h1 className="text-3xl font-bold mb-2">Order Confirmed!</h1>
-        <p className="text-lg text-foreground/70 mb-6">
-          Your payment was verified and your order is being processed.
-        </p>
-        {orderInfo && (
-          <p className="text-sm text-foreground/60 mb-6">
-            Order **#{orderInfo.orderId}**
-          </p>
-        )}
-        <Link href="/account/orders">
-          <Button size="lg">View Order History</Button>
-        </Link>
-      </div>
-    );
-  }
-
   // Calculate total AFTER discount for the final order creation
-  const finalOrderTotal = grandTotal - checkoutData.discountValue;
+  const finalOrderTotal = grandTotal; // Now this comes from secureTotals
 
   // Base props for all steps
   const baseStepProps = {
@@ -267,16 +250,17 @@ function CheckoutPageContent() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <Card className="lg:col-span-2 p-6">
-          {ComponentToRender && (
+          {CurrentStepComponent && (
             <ComponentToRender {...baseStepProps} {...paymentProps} />
           )}
         </Card>
 
         <CheckoutSummaryCard
-          cartSubtotal={subtotal}
+          cartSubtotal={subtotal} // Use raw subtotal
           shippingCost={shippingCost}
           tax={tax}
           grandTotal={grandTotal}
+          discountAmount={discountAmount} // Pass calculated discount amount
           shippingOption={checkoutData.shippingOption}
           onDiscountApplied={handleDiscountApplied}
         />

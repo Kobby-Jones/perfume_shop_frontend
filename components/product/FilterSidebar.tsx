@@ -7,7 +7,6 @@ import { Filter, X, Loader2 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 import { apiFetch } from '@/lib/api/httpClient'; // Import API client
-// import { MOCK_PRODUCTS } from '@/lib/data/mock-products'; // <-- REMOVED MOCK IMPORT
 
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
@@ -21,21 +20,24 @@ interface FilterOptionsResponse {
     maxPrice: number;
 }
 
-// Function to fetch dynamic filter options from a new hypothetical API endpoint
-// NOTE: We assume a new API endpoint /products/filters that returns this
+const priceRangeMin = 0; 
+
+/**
+ * Function to fetch dynamic filter options from the live API endpoint.
+ */
 const fetchFilterOptions = async (): Promise<FilterOptionsResponse> => {
-    // For now, we mock the API response structure until the backend is fully deployed
-    // In a production backend, this endpoint would query unique brands and MAX(price).
-    return {
-        brands: ['AromaLux', 'The Scent Co.', 'Oud Masters', 'Citrus Bliss', 'Elite Fragrances', 'Urban Essence', 'Lumière Parfum', 'BlueWave', 'Scentory Labs', 'Flora Essence', 'Artisan Blends'],
-        maxPrice: 200, // Safe maximum price based on mock data
-    };
-    // const data = await apiFetch('/products/filters');
-    // return data as FilterOptionsResponse;
+    try {
+        const data = await apiFetch('/products/filters');
+        // Ensure maxPrice is at least 100 for a reasonable slider scale
+        data.maxPrice = Math.max(100, Math.ceil(data.maxPrice / 100) * 100); 
+        return data as FilterOptionsResponse;
+    } catch (error) {
+        console.error("Failed to fetch filter options:", error);
+        // Return a safe default structure on error
+        return { brands: [], maxPrice: 1000 };
+    }
 };
 
-
-const priceRangeMin = 0; 
 
 /**
  * Renders the interactive filter controls for the Product Listing Page.
@@ -45,7 +47,7 @@ export function FilterSidebar({ onFilterChange }: { onFilterChange: (filters: an
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
   
-  // Fetch dynamic filter options
+  // Fetch dynamic filter options from the live backend
   const { data: filterOptions, isLoading: isLoadingOptions } = useQuery<FilterOptionsResponse>({
       queryKey: ['filterOptions'],
       queryFn: fetchFilterOptions,
@@ -53,13 +55,14 @@ export function FilterSidebar({ onFilterChange }: { onFilterChange: (filters: an
   });
 
   const maxPrice = filterOptions?.maxPrice || 1000;
-  const initialPriceRange: number[] = [priceRangeMin, maxPrice];
+  // Use a sensible default range based on the fetched maxPrice
+  const initialPriceRange: number[] = useMemo(() => [priceRangeMin, maxPrice], [maxPrice]);
   const [priceRange, setPriceRange] = useState<number[]>(initialPriceRange);
   
-  // Re-initialize price range if maxPrice changes (e.g., first load)
+  // Reset price range when dynamic maxPrice is initially fetched
   useMemo(() => {
-    setPriceRange(initialPriceRange);
-  }, [maxPrice]);
+      setPriceRange(initialPriceRange);
+  }, [initialPriceRange]);
 
 
   /**
@@ -71,7 +74,8 @@ export function FilterSidebar({ onFilterChange }: { onFilterChange: (filters: an
       : selectedBrands.filter((b) => b !== brand);
     
     setSelectedBrands(newBrands);
-    onFilterChange({ brands: newBrands });
+    // Join brands with comma for the API query string
+    onFilterChange({ brands: newBrands.join(',') });
   };
 
   /**
@@ -95,10 +99,21 @@ export function FilterSidebar({ onFilterChange }: { onFilterChange: (filters: an
     setIsSheetOpen(false);
   };
 
+  // Determine if filters are active to enable the clear button
+  const areFiltersActive = useMemo(() => {
+      return (
+          selectedBrands.length > 0 ||
+          priceRange[0] !== priceRangeMin ||
+          priceRange[1] !== maxPrice
+      );
+  }, [selectedBrands, priceRange, maxPrice]);
+
+
   // The actual filter content, reusable for both mobile Sheet and desktop sidebar
   const filterContent = isLoadingOptions ? (
       <div className="flex justify-center items-center h-32">
           <Loader2 className="w-6 h-6 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground ml-2">Loading filters...</p>
       </div>
   ) : (
     <div className="space-y-6 p-4">
@@ -159,7 +174,7 @@ export function FilterSidebar({ onFilterChange }: { onFilterChange: (filters: an
         variant="outline" 
         onClick={handleClearFilters}
         className="w-full mt-6"
-        disabled={selectedBrands.length === 0 && priceRange[0] === priceRangeMin && priceRange[1] === maxPrice}
+        disabled={!areFiltersActive}
       >
         <X className="w-4 h-4 mr-2" />
         Clear Filters

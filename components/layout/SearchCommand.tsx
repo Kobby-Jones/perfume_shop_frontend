@@ -98,7 +98,7 @@ export function SearchCommand() {
     return new Intl.NumberFormat('en-GH', { 
       style: 'currency', 
       currency: 'GHS' 
-    }).format(price * 14); // Your conversion rate
+    }).format(price); // Your conversion rate
   };
 
   return (

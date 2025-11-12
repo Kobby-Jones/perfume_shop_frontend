@@ -19,11 +19,14 @@ interface DashboardStats {
 
 interface RecentOrder {
     id: number;
-    orderNumber: string;
-    customerName: string;
-    totalAmount: number;
+    orderTotal: number;  
     status: string;
     createdAt: string;
+    user?: {                
+        id: number;
+        email: string;
+        name: string;
+    };
 }
 
 interface TopProduct {
@@ -70,17 +73,17 @@ const fetchDashboardStats = async (): Promise<DashboardStats> => {
 
 const fetchRecentOrders = async (): Promise<RecentOrder[]> => {
     try {
-        const data = await apiFetch('/admin/orders/recent?limit=5');
-        return data?.orders || [];
+        const data = await apiFetch('/admin/orders');
+        // Return first 5 orders for recent orders section
+        return (data?.orders || []).slice(0, 5);
     } catch (error) {
         console.error('Failed to fetch recent orders:', error);
         return [];
     }
 };
-
 const fetchTopProducts = async (): Promise<TopProduct[]> => {
     try {
-        const data = await apiFetch('/admin/products/top-performers?limit=5');
+        const data = await apiFetch('/admin/reports/top-products');
         return data?.products || [];
     } catch (error) {
         console.error('Failed to fetch top products:', error);
@@ -194,14 +197,14 @@ export default function AdminDashboardOverview() {
                     
                     return (
                         <div key={stat.title} className="bg-white p-4 md:p-6 rounded-xl shadow-md border-t-4 border-primary/50">
-                            <div className="flex justify-between items-center mb-2">
-                                <p className="text-xs md:text-sm font-medium text-gray-500">{stat.title}</p>
-                                {Icon && <Icon className={cn("w-5 h-5 md:w-6 md:h-6 flex-shrink-0", stat.color)} />}
-                            </div>
-                            <p className="text-xl md:text-2xl lg:text-3xl font-extrabold break-words">
-                                {stat.value}
-                            </p>
+                        <div className="flex justify-between items-center mb-2">
+                            <p className="text-xs md:text-sm font-medium text-gray-500">{stat.title}</p>
+                            {Icon && <Icon className={cn("w-5 h-5 md:w-6 md:h-6 flex-shrink-0", stat.color)} />}
                         </div>
+                        <p className="text-lg md:text-xl lg:text-2xl font-extrabold break-all leading-tight">
+                            {stat.value}
+                        </p>
+                    </div>
                     );
                 })}
             </div>
@@ -232,20 +235,20 @@ export default function AdminDashboardOverview() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {recentOrders.map((order) => (
-                                    <tr key={order.id} className="border-b last:border-0 hover:bg-gray-50">
-                                        <td className="py-3 font-medium text-primary">#{order.orderNumber}</td>
-                                        <td className="py-3">{order.customerName}</td>
-                                        <td className="py-3 font-semibold">{formatGHS(order.totalAmount)}</td>
-                                        <td className="py-3">
-                                            <span className={cn("px-2 py-1 rounded-full text-xs font-medium", getStatusColor(order.status))}>
-                                                {order.status}
-                                            </span>
-                                        </td>
-                                        <td className="py-3 text-gray-500">{formatDate(order.createdAt)}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
+                            {recentOrders.map((order) => (
+                                <tr key={order.id} className="border-b last:border-0 hover:bg-gray-50">
+                                    <td className="py-3 font-medium text-primary">#{order.id}</td>
+                                    <td className="py-3">{order.user?.name || 'Unknown User'}</td>
+                                    <td className="py-3 font-semibold">{formatGHS(order.orderTotal || 0)}</td>
+                                    <td className="py-3">
+                                        <span className={cn("px-2 py-1 rounded-full text-xs font-medium", getStatusColor(order.status))}>
+                                            {order.status}
+                                        </span>
+                                    </td>
+                                    <td className="py-3 text-gray-500">{formatDate(order.createdAt)}</td>
+                                </tr>
+                            ))}
+                        </tbody>
                         </table>
                     </div>
                 ) : (

@@ -26,7 +26,7 @@ type LoginFormData = z.infer<typeof loginSchema>;
 /**
  * LoginForm
  * Handles user authentication via backend API.
- * Displays server errors and redirects on success.
+ * Displays server errors and redirects based on user role.
  */
 export function LoginForm() {
   const { login } = useAuth();
@@ -50,22 +50,24 @@ export function LoginForm() {
     try {
       const response = await login(data.email, data.password);
       
-      // The login function in useAuth now sets the user object, which includes the role.
-      // We rely on the internal state and the router logic handles the rest, but 
-      // for an immediate redirect based on the role known from the response:
-
-      // NOTE: We rely on the useAuth internal user state to determine the role
-      // For immediate redirection based on API response structure:
-      const userRole = (response as any)?.user?.role;
+      // Extract user role from the response
+      // The login function should return the full response including user data
+      const userRole = (response as any)?.user?.role || (response as any)?.role;
       
-      if (userRole === "admin") {
+      console.log('Login successful, user role:', userRole); // Debug log
+      
+      // Role-based redirection
+      if (userRole === 'admin') {
+        console.log('Redirecting admin to /admin'); // Debug log
         router.push('/admin');
       } else {
+        console.log('Redirecting customer to /account'); // Debug log
         router.push('/account');
       }
 
     } catch (err: any) {
       // Handle API or network errors
+      console.error('Login error:', err); // Debug log
       setError(err.message || 'Login failed. Please check your credentials.');
       setIsSubmitting(false);
     }

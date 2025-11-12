@@ -46,8 +46,7 @@ export function PaystackForm({ amount, email, reference, onSuccess }: PaystackFo
             console.error('Invalid amount:', amount);
             return;
         }
-
-        const publicKey = "pk_test_145411a920c58ca57042be03bda832ab5a380590";
+        const publicKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY;
         if (!publicKey) {
             toast.error("Payment configuration error. Please contact support.");
             console.error('NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY is not set');

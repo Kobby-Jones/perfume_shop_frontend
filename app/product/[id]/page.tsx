@@ -7,7 +7,7 @@ import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { ShoppingCart, Heart, Truck, Shield, RotateCcw, Star, Package } from 'lucide-react';
 
-import { Product } from '@/lib/data/mock-products'; // Keep for type definition for now
+import { Product } from '@/lib/types';
 import { apiFetch } from '@/lib/api/httpClient'; // Import API client
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';

@@ -32,13 +32,14 @@ const reviewSchema = z.object({
 type ReviewFormData = z.infer<typeof reviewSchema>;
 
 interface Review { 
+  id: number;
   userId: number;
   userName: string;
   rating: number;
   title: string;
   comment: string;
   date: string;
-  helpful?: number; // Number of people who found this helpful
+  helpfulCount: number;
 } 
 
 interface ReviewData {
@@ -81,7 +82,7 @@ export function ReviewSection({ productId }: { productId: number }) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reviews', productId] });
-      toast.success("Review submitted successfully!");
+      toast.success("Review submitted successfully! It will appear after moderation.");
       form.reset({ rating: 5, title: '', comment: '' });
       setShowForm(false);
     },
@@ -89,6 +90,52 @@ export function ReviewSection({ productId }: { productId: number }) {
       toast.error(error.message || "Could not submit review. Please try again.");
     },
   });
+  
+  // Helpful Vote Mutation
+  const helpfulMutation = useMutation({
+    mutationFn: (reviewId: number) => {
+      return apiFetch(`/reviews/${reviewId}/helpful`, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'increment' }),
+      });
+    },
+    onMutate: async (reviewId) => {
+      await queryClient.cancelQueries({ queryKey: ['reviews', productId] });
+
+      const previousReviewData = queryClient.getQueryData<ReviewData>(['reviews', productId]);
+
+      if (previousReviewData) {
+        queryClient.setQueryData<ReviewData>(['reviews', productId], {
+          ...previousReviewData,
+          reviews: previousReviewData.reviews.map(review => 
+            review.id === reviewId 
+              ? { ...review, helpfulCount: review.helpfulCount + 1 } 
+              : review
+          )
+        });
+      }
+      return { previousReviewData };
+    },
+    onError: (err, reviewId, context) => {
+      if (context?.previousReviewData) {
+        queryClient.setQueryData(['reviews', productId], context.previousReviewData);
+      }
+      toast.error("Failed to register vote.");
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['reviews', productId] });
+    },
+  });
+
+  const handleVoteHelpful = (reviewId: number) => {
+    if (!isLoggedIn) {
+      toast.warning('You must be logged in to vote.');
+      return;
+    }
+    if (helpfulMutation.isPending) return; 
+
+    helpfulMutation.mutate(reviewId);
+  };
 
   const onSubmit = (data: ReviewFormData) => {
     if (!isLoggedIn) {
@@ -251,8 +298,8 @@ export function ReviewSection({ productId }: { productId: number }) {
           </Card>
         ) : (
           <div className="space-y-4">
-            {filteredReviews.map((review, index) => (
-              <Card key={index} className="hover:shadow-md transition-shadow">
+            {filteredReviews.map((review) => (
+              <Card key={review.id} className="hover:shadow-md transition-shadow">
                 <CardContent className="p-6">
                   <div className="space-y-4">
                     {/* Header */}
@@ -279,9 +326,13 @@ export function ReviewSection({ productId }: { productId: number }) {
 
                     {/* Footer Actions */}
                     <div className="flex items-center gap-4 pt-2 border-t">
-                      <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+                      <button 
+                        className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors disabled:cursor-wait"
+                        onClick={() => handleVoteHelpful(review.id)}
+                        disabled={helpfulMutation.isPending}
+                      >
                         <ThumbsUp className="w-4 h-4" />
-                        <span>Helpful ({review.helpful || 0})</span>
+                        <span>Helpful ({review.helpfulCount || 0})</span>
                       </button>
                     </div>
                   </div>

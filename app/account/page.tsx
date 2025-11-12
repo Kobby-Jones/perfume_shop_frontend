@@ -2,6 +2,8 @@
 
 'use client';
 
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { AccountLayout } from '@/components/account/AccountLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -31,61 +33,29 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api/httpClient';
 
+// Define the consolidated structure from the new API endpoint
 interface UserStats {
   totalOrders: number;
   totalSpent: number;
   wishlistItems: number;
   rewardPoints: number;
-  accountTier?: string;
+  accountTier: 'Bronze' | 'Silver' | 'Gold';
 }
 
 interface RecentOrder {
   id: number;
   orderNumber?: string;
-  date: string; // Changed from createdAt to match backend
+  date: string; 
   status: string;
-  total: number; // Changed from totalAmount to match backend
+  total: number;
   itemCount: number;
 }
 
+// Fetch consolidated stats from the new endpoint
 const fetchUserStats = async (): Promise<UserStats> => {
   try {
-    // Fetch from multiple endpoints and aggregate
-    const [ordersData, wishlistData] = await Promise.allSettled([
-      apiFetch('/account/orders').catch(() => ({ orders: [] })),
-      apiFetch('/wishlist').catch(() => ({ items: [] })),
-    ]);
-
-    const ordersResult = ordersData.status === 'fulfilled' ? ordersData.value : null;
-    const orders = Array.isArray(ordersResult) ? ordersResult : (ordersResult?.orders || []);
-    
-    const wishlistResult = wishlistData.status === 'fulfilled' ? wishlistData.value : null;
-    const wishlist = Array.isArray(wishlistResult) ? wishlistResult : (wishlistResult?.items || []);
-
-    // Calculate stats from orders
-    const completedOrders = orders.filter((o: any) => 
-      ['completed', 'delivered'].includes(o.status?.toLowerCase())
-    );
-    
-    const totalSpent = completedOrders.reduce((sum: number, order: any) => 
-      sum + (order.total || order.totalAmount || 0), 0
-    );
-
-    // Calculate reward points (1 point per 10 GHS spent)
-    const rewardPoints = Math.floor(totalSpent / 10);
-
-    // Determine tier based on total spent
-    let accountTier = 'Bronze';
-    if (totalSpent > 5000) accountTier = 'Gold';
-    else if (totalSpent > 2000) accountTier = 'Silver';
-
-    return {
-      totalOrders: orders.length,
-      totalSpent: totalSpent,
-      wishlistItems: wishlist.length,
-      rewardPoints: rewardPoints,
-      accountTier: accountTier,
-    };
+    const data = await apiFetch('/auth/account/stats'); 
+    return data as UserStats;
   } catch (error) {
     console.error('Failed to fetch user stats:', error);
     return {
@@ -101,14 +71,11 @@ const fetchUserStats = async (): Promise<UserStats> => {
 const fetchRecentOrders = async (): Promise<RecentOrder[]> => {
   try {
     const data = await apiFetch('/account/orders');
-    console.log('Recent orders data:', data); // Debug log
     
-    // Handle both array response and object with orders property
     const orders = Array.isArray(data) ? data : (data?.orders || []);
     
-    // Sort by date descending and take first 3
     const sorted = orders
-      .filter((order: any) => order.date || order.createdAt) // Filter out orders without dates
+      .filter((order: any) => order.date || order.createdAt) 
       .sort((a: any, b: any) => {
         const dateA = new Date(a.date || a.createdAt).getTime();
         const dateB = new Date(b.date || b.createdAt).getTime();
@@ -116,13 +83,12 @@ const fetchRecentOrders = async (): Promise<RecentOrder[]> => {
       })
       .slice(0, 3);
 
-    // Transform to match interface
     return sorted.map((order: any) => ({
       id: order.id,
       orderNumber: order.orderNumber || `ORD-${order.id}`,
-      date: order.date || order.createdAt, // Support both field names
+      date: order.date || order.createdAt, 
       status: order.status,
-      total: order.total || order.totalAmount || 0,
+      total: order.total || order.orderTotal || 0,
       itemCount: order.items?.length || order.itemCount || 0,
     }));
   } catch (error) {
@@ -151,7 +117,6 @@ const formatDate = (dateString: string) => {
     
     const date = new Date(dateString);
     
-    // Check if date is valid
     if (isNaN(date.getTime())) {
       console.warn('Invalid date:', dateString);
       return 'Date unavailable';
@@ -191,24 +156,44 @@ const getTierBadge = (tier?: string) => {
 };
 
 /**
- * User Dashboard Overview Page with real API integration
+ * User Dashboard Overview Page with role-based routing guard
  */
 export default function AccountDashboardPage() {
   const { user, isLoggedIn } = useAuth();
+  const router = useRouter();
+
+  // Router Guard: Redirect admin users to admin dashboard
+  useEffect(() => {
+    if (isLoggedIn && user?.role === 'admin') {
+      console.log('Admin user detected on customer page, redirecting to /admin');
+      router.replace('/admin'); // Use replace to prevent back navigation to this page
+    }
+  }, [isLoggedIn, user?.role, router]);
 
   const { data: stats, isLoading: statsLoading } = useQuery<UserStats>({
     queryKey: ['userStats'],
     queryFn: fetchUserStats,
-    enabled: isLoggedIn,
-    staleTime: 1000 * 60 * 2, // Cache for 2 minutes
+    enabled: isLoggedIn && user?.role !== 'admin', // Don't fetch if admin
+    staleTime: 1000 * 60 * 2,
   });
 
   const { data: recentOrders, isLoading: ordersLoading } = useQuery<RecentOrder[]>({
     queryKey: ['userRecentOrders'],
     queryFn: fetchRecentOrders,
-    enabled: isLoggedIn,
-    staleTime: 1000 * 60 * 1, // Cache for 1 minute
+    enabled: isLoggedIn && user?.role !== 'admin', // Don't fetch if admin
+    staleTime: 1000 * 60 * 1,
   });
+
+  // Show loading state during redirect check or data fetching
+  if (!isLoggedIn || user?.role === 'admin' || (statsLoading && !stats)) {
+    return (
+      <AccountLayout>
+        <div className="flex justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </AccountLayout>
+    );
+  }
 
   const userName = user?.name || 'Valued Customer';
   const userEmail = user?.email || '';
@@ -218,16 +203,6 @@ export default function AccountDashboardPage() {
 
   const tierBadge = getTierBadge(stats?.accountTier);
   const isLoading = statsLoading || ordersLoading;
-
-  if (isLoading && !stats) {
-    return (
-      <AccountLayout>
-        <div className="flex justify-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-primary" />
-        </div>
-      </AccountLayout>
-    );
-  }
 
   return (
     <AccountLayout>

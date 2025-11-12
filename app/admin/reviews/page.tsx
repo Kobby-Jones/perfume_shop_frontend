@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAlert } from '@/components/shared/ModalAlert';
 
-// Define the precise structure expected from the backend
+// Updated interface to match backend response structure
 interface Review {
     id: number;
     title: string;
@@ -21,8 +21,17 @@ interface Review {
     rating: number;
     createdAt: string; 
     status: 'pending' | 'approved' | 'rejected';
-    product: { name: string; id: number };
-    user: { name: string; email: string };
+    productId: number;
+    userId: number;
+    product: { 
+        id: number;
+        name: string;
+    };
+    user: { 
+        id: number;
+        name: string;
+        email: string;
+    };
 }
 
 const STATUS_FILTERS = ['All', 'pending', 'approved', 'rejected'];
@@ -38,9 +47,10 @@ export default function AdminReviewsPage() {
         queryKey: ['adminReviews'],
         queryFn: async () => {
             const data = await apiFetch('/admin/reviews');
+            console.log('Fetched reviews:', data.reviews); // Debug log
             return data.reviews as Review[];
         },
-        staleTime: 1000 * 60, // Reviews change often during moderation
+        staleTime: 1000 * 60,
     });
 
     // Mutation to update review status
@@ -56,26 +66,51 @@ export default function AdminReviewsPage() {
         },
     });
 
-
     const filteredReviews = useMemo(() => {
-        return allReviews.filter(review => {
-            const matchesSearch = review.product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                review.user.name.toLowerCase().includes(searchTerm.toLowerCase());
+        const term = searchTerm.toLowerCase().trim();
+        
+        const filtered = allReviews.filter(review => {
+            // First apply status filter
             const matchesStatus = statusFilter === 'All' || review.status === statusFilter;
-            return matchesSearch && matchesStatus;
+            
+            // If no status match, skip this review
+            if (!matchesStatus) return false;
+            
+            // If no search term, include all reviews that match status
+            if (!term) return true;
+            
+            // Apply search filter - safely handle nested objects
+            const productName = review.product?.name?.toLowerCase() || '';
+            const userName = review.user?.name?.toLowerCase() || '';
+            const userEmail = review.user?.email?.toLowerCase() || '';
+            const reviewTitle = review.title?.toLowerCase() || '';
+            const reviewComment = review.comment?.toLowerCase() || '';
+            
+            const matchesSearch = 
+                productName.includes(term) ||
+                userName.includes(term) ||
+                userEmail.includes(term) ||
+                reviewTitle.includes(term) ||
+                reviewComment.includes(term);
+            
+            return matchesSearch;
         });
+        
+        console.log(`Filtered reviews (status: ${statusFilter}, search: "${term}"):`, filtered.length); // Debug log
+        return filtered;
     }, [allReviews, searchTerm, statusFilter]);
 
     const stats = useMemo(() => {
         const total = allReviews.length;
         const pending = allReviews.filter(r => r.status === 'pending').length;
         const approved = allReviews.filter(r => r.status === 'approved').length;
+        const rejected = allReviews.filter(r => r.status === 'rejected').length;
         const sum = allReviews.reduce((s, r) => s + r.rating, 0);
         const avgRating = total > 0 ? (sum / total).toFixed(1) : 'N/A';
         
-        return { total, pending, approved, avgRating };
+        console.log('Stats:', { total, pending, approved, rejected }); // Debug log
+        return { total, pending, approved, rejected, avgRating };
     }, [allReviews]);
-
 
     const handleUpdateStatus = (id: number, status: 'approved' | 'rejected') => {
         updateStatusMutation.mutate({ id, status });
@@ -110,7 +145,6 @@ export default function AdminReviewsPage() {
     );
 
     if (isError) return <div className="text-red-500 p-4">Failed to load review data.</div>;
-
 
     return (
         <div className="space-y-4 md:space-y-6">
@@ -161,7 +195,7 @@ export default function AdminReviewsPage() {
             {/* Filters */}
             <div className="bg-white p-4 rounded-lg shadow-sm border space-y-3">
                 <Input 
-                    placeholder="Search by product or customer name..." 
+                    placeholder="Search by product, customer, or review content..." 
                     value={searchTerm} 
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full"
@@ -182,30 +216,40 @@ export default function AdminReviewsPage() {
             <div className="space-y-3">
                 {filteredReviews.length === 0 ? (
                     <div className="bg-white rounded-lg p-6 text-center text-gray-500">
-                        No reviews found.
+                        {allReviews.length === 0 
+                            ? "No reviews found in the system."
+                            : `No reviews found matching your filters (Status: ${statusFilter}${searchTerm ? `, Search: "${searchTerm}"` : ''}).`
+                        }
                     </div>
                 ) : (
                     filteredReviews.map((review) => (
-                        <Card key={review.id} className={`border-l-4 ${getStatusColor(review.status).replace('bg', 'border')}-500`}>
+                        <Card key={review.id} className={`border-l-4 border-l-${getStatusColor(review.status).includes('yellow') ? 'yellow' : getStatusColor(review.status).includes('green') ? 'green' : 'red'}-500`}>
                             <CardContent className="p-4">
                                 <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
                                     <div className="flex-1 space-y-2">
                                         <div className="flex items-center gap-2 flex-wrap">
-                                            <h3 className="font-semibold text-base">{review.product.name} (ID: {review.product.id})</h3>
+                                            <h3 className="font-semibold text-base">
+                                                {review.product?.name || 'Unknown Product'} 
+                                                {review.product?.id && ` (ID: ${review.product.id})`}
+                                            </h3>
                                             <Badge className={getStatusColor(review.status)}>
                                                 {review.status.charAt(0).toUpperCase() + review.status.slice(1)}
                                             </Badge>
                                         </div>
                                         
-                                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                                        <div className="flex items-center gap-2 text-sm text-gray-600 flex-wrap">
                                             {renderStars(review.rating)}
                                             <span>•</span>
-                                            <span>{review.user.name} ({review.user.email})</span>
+                                            <span>
+                                                {review.user?.name || 'Unknown User'} 
+                                                {review.user?.email && ` (${review.user.email})`}
+                                            </span>
                                             <span>•</span>
                                             <span>{new Date(review.createdAt).toLocaleDateString()}</span>
                                         </div>
 
-                                        <p className="text-sm text-gray-700 mt-2">{review.comment}</p>
+                                        <p className="text-sm font-semibold text-gray-900">{review.title}</p>
+                                        <p className="text-sm text-gray-700">{review.comment}</p>
                                     </div>
 
                                     {review.status === 'pending' && (

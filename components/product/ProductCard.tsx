@@ -6,7 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { ShoppingCart, Heart, Eye, Star, TrendingUp, Zap, Award } from 'lucide-react';
 
-import { Product } from '@/lib/data/mock-products';
+import { Product } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';

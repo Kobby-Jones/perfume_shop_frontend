@@ -10,8 +10,9 @@ import { Package, Truck, TrendingUp, Sparkles, Tag, CheckCircle, AlertTriangle, 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useMemo, useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query'; // Added useQueryClient
 import { apiFetch } from '@/lib/api/httpClient';
+import { toast } from 'sonner';
 
 interface DiscountDetails {
     code: string;
@@ -24,41 +25,49 @@ interface CheckoutSummaryCardProps {
     cartSubtotal: number; // Raw cart subtotal
     shippingCost: number;
     tax: number;
-    grandTotal: number;
+    grandTotal: number; // Final calculated total
+    discountAmount: number; // Discount amount applied by the backend
     shippingOption: 'standard' | 'express';
-    onDiscountApplied: (discount: DiscountDetails | null) => void;
+    onDiscountApplied: (discount: { code: string } | null) => void;
 }
 
 export function CheckoutSummaryCard({ 
     cartSubtotal, 
     shippingCost, 
     tax, 
-    grandTotal: initialGrandTotal,
+    grandTotal, // Final total comes directly from prop
+    discountAmount, // Discount value comes directly from prop
     shippingOption,
     onDiscountApplied 
 }: CheckoutSummaryCardProps) {
+    const queryClient = useQueryClient();
     const [couponCode, setCouponCode] = useState('');
-    const [activeDiscount, setActiveDiscount] = useState<DiscountDetails | null>(null);
     const [discountError, setDiscountError] = useState<string | null>(null);
 
     const formatCurrency = (amount: number) => 
         new Intl.NumberFormat('en-GH', { style: 'currency', currency: 'GHS' }).format(amount);
 
+    // --- Discount Application Logic ---
     const discountMutation = useMutation({
+        // Mutation now only validates and returns the discount metadata for display/state updates
         mutationFn: (code: string) =>
             apiFetch('/discounts/validate', { 
                 method: 'POST', 
                 body: JSON.stringify({ code, subtotal: cartSubtotal }) 
             }),
-        onSuccess: (data: DiscountDetails) => {
-            setActiveDiscount(data);
+        onSuccess: (data: any) => {
+            // Success means the code is valid. Notify parent and let parent re-fetch secure totals.
             setDiscountError(null);
-            onDiscountApplied(data);
+            onDiscountApplied({ code: data.discount.code });
+            // Invalidate checkout totals immediately to trigger server-side recalculation
+            queryClient.invalidateQueries({ queryKey: ['checkoutTotals'] });
+            toast.success('Coupon code accepted! Totals recalculating.');
         },
         onError: (error: any) => {
-            setActiveDiscount(null);
-            onDiscountApplied(null);
+            onDiscountApplied(null); // Clear code from parent state
             setDiscountError(error.message || 'Invalid or ineligible coupon.');
+            // Invalidate checkout totals to force recalculation without a discount
+            queryClient.invalidateQueries({ queryKey: ['checkoutTotals'] });
         },
     });
 
@@ -68,29 +77,17 @@ export function CheckoutSummaryCard({
     };
 
     const handleRemoveDiscount = () => {
-        setActiveDiscount(null);
         setCouponCode('');
         setDiscountError(null);
-        onDiscountApplied(null);
+        onDiscountApplied(null); // Clear code from parent state
+        // Invalidate checkout totals to force recalculation without a discount
+        queryClient.invalidateQueries({ queryKey: ['checkoutTotals'] });
     };
-
-    // Calculate applied discount value and final total
-    const { finalTotal, discountValue } = useMemo(() => {
-        let finalTotal = initialGrandTotal;
-        let discountValue = 0;
-
-        if (activeDiscount) {
-            if (activeDiscount.type === 'percentage') {
-                discountValue = (cartSubtotal * activeDiscount.value) / 100;
-            } else if (activeDiscount.type === 'fixed') {
-                discountValue = activeDiscount.value;
-            }
-            // Discount only applies to subtotal, not shipping or tax
-            finalTotal = initialGrandTotal - discountValue;
-            if (finalTotal < 0) finalTotal = 0; // Prevent negative totals
-        }
-        return { finalTotal, discountValue: Math.max(0, discountValue) };
-    }, [activeDiscount, cartSubtotal, initialGrandTotal]);
+    
+    // Check if discount is currently active (discountAmount > 0 implies a code was successfully applied)
+    const isActiveDiscount = discountAmount > 0;
+    // Attempt to get the current code from the input state if active
+    const activeDiscountCode = isActiveDiscount ? couponCode : undefined;
 
 
     return (
@@ -130,10 +127,10 @@ export function CheckoutSummaryCard({
                     </div>
                     
                     {/* Discount Line */}
-                    {activeDiscount && (
+                    {isActiveDiscount && (
                         <div className="flex justify-between items-center text-red-600 font-semibold pt-1 border-t border-dashed mt-2">
-                            <span>Coupon ({activeDiscount.code}):</span>
-                            <span>- {formatCurrency(discountValue)}</span>
+                            <span>Coupon ({activeDiscountCode}):</span>
+                            <span>- {formatCurrency(discountAmount)}</span>
                         </div>
                     )}
                 </div>
@@ -146,10 +143,10 @@ export function CheckoutSummaryCard({
                         <Tag className="h-4 w-4"/> Have a Coupon?
                     </h4>
                     
-                    {activeDiscount ? (
+                    {isActiveDiscount ? (
                         <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
                             <span className="text-sm font-semibold text-green-800 flex items-center gap-2">
-                                <CheckCircle className='w-4 h-4'/> {activeDiscount.code} Applied
+                                <CheckCircle className='w-4 h-4'/> {activeDiscountCode} Applied
                             </span>
                             <Button variant="ghost" size="sm" onClick={handleRemoveDiscount}>Remove</Button>
                         </div>
@@ -185,16 +182,16 @@ export function CheckoutSummaryCard({
                 <div className="bg-primary/10 rounded-lg p-4 space-y-2">
                     <div className="flex justify-between items-center">
                         <span className="text-base font-semibold">Total to Pay:</span>
-                        <span className="text-3xl font-bold text-primary">{formatCurrency(finalTotal)}</span>
+                        <span className="text-3xl font-bold text-primary">{formatCurrency(grandTotal)}</span>
                     </div>
                 </div>
                 
                 {/* Savings Badge */}
-                {discountValue > 0 && (
+                {discountAmount > 0 && (
                     <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center gap-2">
                         <Sparkles className="h-4 w-4 text-green-600" />
                         <p className="text-xs text-green-800 font-semibold">
-                            You saved {formatCurrency(discountValue)}!
+                            You saved {formatCurrency(discountAmount)}!
                         </p>
                     </div>
                 )}

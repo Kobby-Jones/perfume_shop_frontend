@@ -2,7 +2,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Menu, Search, User, ShoppingCart, LogOut, Heart, Package, ChevronDown, Sparkles } from 'lucide-react';
+import { Menu, Search, User, ShoppingCart, LogOut, Heart, Package, ChevronDown, Sparkles, LayoutDashboard } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -86,6 +86,20 @@ export function Header() {
                   </div>
                   
                   <Separator />
+
+                  {/* Admin Dashboard Link - Mobile */}
+                  {isLoggedIn && user?.role === 'admin' && (
+                    <>
+                      <Link 
+                        href="/admin" 
+                        className="flex items-center px-4 py-3 rounded-lg text-base font-semibold bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                      >
+                        <LayoutDashboard className="mr-2 h-5 w-5" />
+                        Admin Dashboard
+                      </Link>
+                      <Separator />
+                    </>
+                  )}
 
                   {/* Mobile Navigation */}
                   <nav className="flex flex-col space-y-1">
@@ -223,6 +237,22 @@ export function Header() {
               <Heart className="h-5 w-5" />
             </Button>
 
+            {/* Admin Dashboard - Desktop (only for admins) */}
+            {isLoggedIn && user?.role === 'admin' && (
+              <Link href="/admin">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  aria-label="Admin Dashboard"
+                  className="hidden lg:flex hover:bg-gray-100 relative"
+                  title="Admin Dashboard"
+                >
+                  <LayoutDashboard className="h-5 w-5 text-primary" />
+                  <span className="absolute -top-1 -right-1 flex h-2 w-2 rounded-full bg-primary"></span>
+                </Button>
+              </Link>
+            )}
+
             {/* User Account */}
             {isLoggedIn ? (
               <DropdownMenu>
@@ -236,9 +266,26 @@ export function Header() {
                     <div>
                       <p className="font-semibold">Welcome back!</p>
                       <p className="text-xs text-gray-500 font-normal">{user?.email}</p>
+                      {user?.role === 'admin' && (
+                        <Badge variant="default" className="mt-1 text-xs">Admin</Badge>
+                      )}
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
+                  
+                  {/* Admin Dashboard in dropdown for mobile/tablet */}
+                  {user?.role === 'admin' && (
+                    <>
+                      <Link href="/admin">
+                        <DropdownMenuItem className="lg:hidden">
+                          <LayoutDashboard className="mr-2 h-4 w-4" />
+                          Admin Dashboard
+                        </DropdownMenuItem>
+                      </Link>
+                      <DropdownMenuSeparator className="lg:hidden" />
+                    </>
+                  )}
+                  
                   <Link href="/account">
                     <DropdownMenuItem>
                       <User className="mr-2 h-4 w-4" />

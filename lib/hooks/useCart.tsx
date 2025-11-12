@@ -8,30 +8,31 @@ import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api/httpClient';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { toast } from 'sonner'; 
-import { Product } from '@/lib/data/mock-products'; // Used for local type definition
+import { Product } from '@/lib/types';
 
 // --- API Response & Type Definitions ---
-// Matches the structure returned by GET /api/cart
 interface CartResponse {
   items: CartDetailItem[];
   totals: {
     subtotal: number;
-    tax: number;
     shipping: number;
+    tax: number;
+    discountAmount: number;
     grandTotal: number;
   };
+  cartTotal: number;
 }
 
 export interface CartDetailItem {
   productId: number;
   quantity: number;
-  product: Product; // Full product details included here
+  product: Product;
   subtotal: number;
 }
 
 interface CartContextType {
   cartDetails: CartDetailItem[];
-  cartTotal: number;
+  rawCartSubtotal: number; 
   totalItems: number;
   totals: CartResponse['totals'] | undefined;
   isLoading: boolean;
@@ -39,25 +40,25 @@ interface CartContextType {
   removeFromCart: (productId: number) => void;
   updateQuantity: (productId: number, quantity: number) => void;
   clearCart: () => void;
-  refetchCart: () => void; // Added for manual checkout trigger
+  refetchCart: () => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 const CART_QUERY_KEY = 'cart';
 
 /**
- * Core cart logic integrated with backend, auth, and Sonner notifications
+ * Core cart logic with optimized mutations
  */
 const useCartLogic = () => {
   const queryClient = useQueryClient();
   const { isLoggedIn, isLoading: isAuthLoading } = useAuth();
   const router = useRouter();
 
-  // --- 1. Fetch Cart Data (Only when logged in) ---
+  // --- 1. Fetch Cart Data ---
   const { data, isLoading, refetch } = useQuery<CartResponse>({
     queryKey: [CART_QUERY_KEY],
-    queryFn: () => apiFetch('/cart'), // Live API call
-    enabled: isLoggedIn && !isAuthLoading, // Fetch only if authenticated and auth state is settled
+    queryFn: () => apiFetch('/cart'),
+    enabled: isLoggedIn && !isAuthLoading, 
     staleTime: 1000 * 30,
   });
   
@@ -65,7 +66,7 @@ const useCartLogic = () => {
 
   const cartDetails = data?.items || [];
   const totals = data?.totals;
-  const cartTotal = totals?.subtotal || 0;
+  const rawCartSubtotal = data?.cartTotal || 0; 
 
   // --- 2. Derived Values ---
   const totalItems = useMemo(
@@ -73,9 +74,9 @@ const useCartLogic = () => {
     [cartDetails]
   );
 
-  // --- 3. Mutations (Uses TanStack Query to keep UI in sync) ---
+  // --- 3. Optimized Mutations ---
+  // Backend now returns 204 No Content, so we rely on query invalidation
 
-  // Unified mutation for add/update
   const updateCartMutation = useMutation({
     mutationFn: ({ productId, quantity }: { productId: number; quantity: number }) =>
       apiFetch('/cart', {
@@ -83,26 +84,41 @@ const useCartLogic = () => {
         body: JSON.stringify({ productId, quantity }),
       }),
     onSuccess: () => {
+      // Invalidate to trigger background refetch
       queryClient.invalidateQueries({ queryKey: [CART_QUERY_KEY] });
-      toast.success('Cart updated.');
+      queryClient.invalidateQueries({ queryKey: ['checkoutTotals'] });
+      toast.success('Cart updated');
     },
     onError: (error: any) => {
       console.error('Cart update failed:', error);
-      toast.error(error.message || 'Failed to update cart. Check stock and try again.');
+      toast.error(error.message || 'Failed to update cart');
     },
   });
 
-  // Mutation for removing an item
   const removeCartMutation = useMutation({
     mutationFn: (productId: number) =>
       apiFetch(`/cart/${productId}`, { method: 'DELETE' }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [CART_QUERY_KEY] });
-      toast.success('Item removed from cart');
+      queryClient.invalidateQueries({ queryKey: ['checkoutTotals'] });
+      toast.success('Item removed');
     },
     onError: (error: any) => {
-      console.error('Cart item removal failed:', error);
-      toast.error(error.message || 'Failed to remove item. Try again.');
+      console.error('Remove failed:', error);
+      toast.error(error.message || 'Failed to remove item');
+    },
+  });
+
+  const clearCartMutation = useMutation({
+    mutationFn: () => apiFetch('/cart/clear', { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [CART_QUERY_KEY] });
+      queryClient.invalidateQueries({ queryKey: ['checkoutTotals'] });
+      toast.info('Cart cleared');
+    },
+    onError: (error: any) => {
+      console.error('Clear cart failed:', error);
+      toast.error(error.message || 'Failed to clear cart');
     },
   });
 
@@ -119,52 +135,108 @@ const useCartLogic = () => {
     [isLoggedIn, router]
   );
 
-  // --- 5. Cart Actions ---
+  // --- 5. Optimistic Cart Actions ---
   const addToCart = useCallback(
     (productId: number, quantity: number = 1) => {
       checkAuthAndProceed(() => {
-        // Calculate the target quantity: find existing, add new quantity
         const existingItem = cartDetails.find(item => item.productId === productId);
         const targetQuantity = (existingItem?.quantity || 0) + quantity;
+        
+        // Optimistic update
+        queryClient.setQueryData<CartResponse>([CART_QUERY_KEY], (old) => {
+          if (!old) return old;
+          
+          const itemIndex = old.items.findIndex(item => item.productId === productId);
+          if (itemIndex >= 0) {
+            // Update existing item
+            const newItems = [...old.items];
+            newItems[itemIndex] = {
+              ...newItems[itemIndex],
+              quantity: targetQuantity,
+              subtotal: newItems[itemIndex].product.price * targetQuantity,
+            };
+            return { ...old, items: newItems };
+          } else {
+            // Item not in cart yet - will be added by server
+            return old;
+          }
+        });
         
         updateCartMutation.mutate({ productId, quantity: targetQuantity });
       });
     },
-    [cartDetails, updateCartMutation, checkAuthAndProceed]
+    [cartDetails, updateCartMutation, checkAuthAndProceed, queryClient]
   );
 
   const updateQuantity = useCallback(
     (productId: number, quantity: number) => {
       checkAuthAndProceed(() => {
         if (quantity <= 0) {
+          // Optimistic removal
+          queryClient.setQueryData<CartResponse>([CART_QUERY_KEY], (old) => {
+            if (!old) return old;
+            return {
+              ...old,
+              items: old.items.filter(item => item.productId !== productId),
+            };
+          });
           removeCartMutation.mutate(productId);
           return;
         }
+        
+        // Optimistic update
+        queryClient.setQueryData<CartResponse>([CART_QUERY_KEY], (old) => {
+          if (!old) return old;
+          const newItems = old.items.map(item =>
+            item.productId === productId
+              ? { ...item, quantity, subtotal: item.product.price * quantity }
+              : item
+          );
+          return { ...old, items: newItems };
+        });
+        
         updateCartMutation.mutate({ productId, quantity });
       });
     },
-    [updateCartMutation, removeCartMutation, checkAuthAndProceed]
+    [updateCartMutation, removeCartMutation, checkAuthAndProceed, queryClient]
   );
 
   const removeFromCart = useCallback(
     (productId: number) => {
-      checkAuthAndProceed(() => removeCartMutation.mutate(productId));
+      checkAuthAndProceed(() => {
+        // Optimistic removal
+        queryClient.setQueryData<CartResponse>([CART_QUERY_KEY], (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            items: old.items.filter(item => item.productId !== productId),
+          };
+        });
+        
+        removeCartMutation.mutate(productId);
+      });
     },
-    [removeCartMutation, checkAuthAndProceed]
+    [removeCartMutation, checkAuthAndProceed, queryClient]
   );
 
   const clearCart = useCallback(() => {
-    // NOTE: Backend API for /api/cart/clear is missing, keeping the mock toast.
-    toast.info('Clear cart feature not yet implemented on the backend.');
-  }, []);
+    checkAuthAndProceed(() => {
+      // Optimistic clear
+      queryClient.setQueryData<CartResponse>([CART_QUERY_KEY], (old) => {
+        if (!old) return old;
+        return { ...old, items: [] };
+      });
+      
+      clearCartMutation.mutate();
+    });
+  }, [clearCartMutation, checkAuthAndProceed, queryClient]);
 
-  // --- 6. Return All Cart Utilities ---
   return {
     cartDetails,
-    cartTotal,
+    rawCartSubtotal,
     totalItems,
     totals,
-    isLoading: isLoading || isAuthLoading, // Combine loading states
+    isLoading: isLoading || isAuthLoading,
     addToCart,
     removeFromCart,
     updateQuantity,

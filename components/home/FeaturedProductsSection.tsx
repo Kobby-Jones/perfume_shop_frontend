@@ -1,21 +1,20 @@
 // components/home/FeaturedProductsSection.tsx
 
-import { getProducts } from '@/lib/data/mock-products';
+import { apiFetch } from '@/lib/api/httpClient';
+import { Product } from '@/lib/types'; // <-- CORRECTED: Use central type
 import { ProductCard } from '@/components/product/ProductCard';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 
 /**
  * Server Component to fetch and display a selection of featured products.
- * Uses the mock API function.
  */
 export async function FeaturedProductsSection() {
-  // Fetch only products marked as featured, or the first 4 if not explicitly marked.
-  const allProducts = await getProducts();
-  const featuredProducts = allProducts.filter(p => p.isFeatured).slice(0, 4);
   
-  // Use non-featured products if the mock data doesn't have 'isFeatured' set up.
-  const displayProducts = featuredProducts.length > 0 ? featuredProducts : allProducts.slice(0, 4);
+  // Fetch products directly from the API endpoint.
+  // We request the API to handle the filtering for featured items.
+  const response = await apiFetch('/products?isFeatured=true&limit=4').catch(() => ({ products: [] }));
+  const displayProducts: Product[] = response.products || [];
 
   return (
     <section className="py-16 md:py-24 container">

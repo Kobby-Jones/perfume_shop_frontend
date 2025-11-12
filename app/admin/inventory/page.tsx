@@ -78,7 +78,7 @@ export default function AdminInventoryPage() {
     const stats = useMemo(() => {
         const lowStock = products.filter(p => p.availableStock > 0 && p.availableStock <= p.lowStockThreshold).length;
         const outOfStock = products.filter(p => p.availableStock === 0).length;
-        const totalValue = products.reduce((sum, p) => sum + (p.availableStock * p.price * 14), 0);
+        const totalValue = products.reduce((sum, p) => sum + (p.availableStock * p.price), 0);
         
         return { lowStock, outOfStock, totalValue, totalProducts: products.length };
     }, [products]);
@@ -248,7 +248,7 @@ export default function AdminInventoryPage() {
                                         <Badge className={status.color + ' text-white'}>{status.label}</Badge>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-primary">
-                                        {formatGHS(p.availableStock * p.price * 14)}
+                                        {formatGHS(p.availableStock * p.price)}
                                     </td>
                                 </tr>
                             );

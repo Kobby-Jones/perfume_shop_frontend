@@ -10,25 +10,27 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { CartItemCard } from '@/components/cart/CartItemCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { AuthGuard } from '@/components/layout/AuthGuard'; // Import AuthGuard
+import { AuthGuard } from '@/components/layout/AuthGuard';
 
 /**
  * Main Shopping Cart Page component.
- * Displays list of items, quantity controls, subtotal, and checkout summary.
+ * Displays list of items, quantity controls, subtotal, and checkout summary,
+ * securely relying on server-side calculated totals.
  */
 export default function CartPage() {
-  const { cartDetails, totalItems, cartTotal, isLoading, clearCart } = useCart();
-  const cartIsEmpty = cartDetails.length === 0;
+  // Use rawCartSubtotal for the subtotal display (before any server-side discounts)
+  const { cartDetails, totalItems, rawCartSubtotal, totals, isLoading, clearCart } = useCart(); 
+  const cartIsEmpty = totalItems === 0;
 
   // Format currency
   const formatCurrency = (amount: number) => 
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'GHS' }).format(amount);
 
-  // Mock Shipping and Tax (fixed values for UI display)
-  const mockShippingCost = cartTotal >= 100 ? 0 : 15.00;
-  const mockTaxRate = 0.08;
-  const mockTax = (cartTotal + mockShippingCost) * mockTaxRate;
-  const grandTotal = cartTotal + mockShippingCost + mockTax;
+  // Safely extract totals calculated by the backend (defaults to standard shipping)
+  const subtotal = rawCartSubtotal;
+  const shippingCost = totals?.shipping ?? 0;
+  const tax = totals?.tax ?? 0;
+  const grandTotal = totals?.grandTotal ?? subtotal + shippingCost + tax;
 
   // --- Empty Cart State ---
   if (cartIsEmpty && !isLoading) {
@@ -81,19 +83,20 @@ export default function CartPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             
-            {/* Subtotals */}
+            {/* Subtotals (using calculated values from the API) */}
             <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                    <p>Subtotal ({totalItems} items):</p>
-                    <p className="font-medium">{formatCurrency(cartTotal)}</p>
+                    {/* Display the raw cart subtotal before any taxes/shipping/discounts */}
+                    <p>Merchandise Subtotal ({totalItems} items):</p> 
+                    <p className="font-medium">{formatCurrency(subtotal)}</p>
                 </div>
                 <div className="flex justify-between">
-                    <p>Shipping Estimate:</p>
-                    <p className="font-medium">{mockShippingCost === 0 ? 'FREE' : formatCurrency(mockShippingCost)}</p>
+                    <p>Shipping Estimate (Standard):</p>
+                    <p className="font-medium">{shippingCost === 0 ? 'FREE' : formatCurrency(shippingCost)}</p>
                 </div>
                 <div className="flex justify-between">
-                    <p>Tax (8%):</p>
-                    <p className="font-medium">{formatCurrency(mockTax)}</p>
+                    <p>Tax Estimate (8%):</p>
+                    <p className="font-medium">{formatCurrency(tax)}</p>
                 </div>
             </div>
 
@@ -113,7 +116,7 @@ export default function CartPage() {
             </Link>
             
             <p className="text-xs text-center text-foreground/60 pt-2">
-                Shipping and taxes calculated during checkout.
+                Discount calculated and final totals confirmed at checkout.
             </p>
 
           </CardContent>

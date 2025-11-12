@@ -7,7 +7,7 @@ import { ListFilter, Loader2, ArrowUp, ArrowDown } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 
-import { Product } from '@/lib/data/mock-products'; // Keep for type definition
+import { Product } from '@/lib/types';
 import { ProductCard } from '@/components/product/ProductCard';
 import { FilterSidebar } from '@/components/product/FilterSidebar';
 import { apiFetch } from '@/lib/api/httpClient'; // Import API client
