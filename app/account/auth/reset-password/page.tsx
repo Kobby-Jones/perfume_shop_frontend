@@ -2,6 +2,7 @@
 
 'use client';
 
+import { Suspense } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -22,15 +23,15 @@ const resetPasswordSchema = z.object({
     confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
     message: 'Passwords do not match.',
-    path: ['confirmPassword'], // Set the error message on the confirmPassword field
+    path: ['confirmPassword'],
 });
 
 type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>;
 
 /**
- * Reset Password Page: User enters a new password using a token from the URL.
+ * Reset Password Form Component (wrapped in Suspense)
  */
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const token = searchParams.get('token');
@@ -147,5 +148,22 @@ export default function ResetPasswordPage() {
                 </form>
             </Form>
         </AuthLayout>
+    );
+}
+
+/**
+ * Reset Password Page with Suspense boundary
+ */
+export default function ResetPasswordPage() {
+    return (
+        <Suspense fallback={
+            <AuthLayout title="Loading...">
+                <div className="flex justify-center items-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin" />
+                </div>
+            </AuthLayout>
+        }>
+            <ResetPasswordForm />
+        </Suspense>
     );
 }
