@@ -14,7 +14,7 @@ export function WhatsAppFloat() {
   const [isOpen, setIsOpen] = useState(false);
   
   // Replace with your actual WhatsApp business number (format: country code + number, no + or spaces)
-  const whatsappNumber = '233123456789'; // Example: Ghana number
+  const whatsappNumber = '+233598738535'; // Example: Ghana number
   const defaultMessage = encodeURIComponent('Hello! I have a question about Scentia Perfumes.');
   const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${defaultMessage}`;
 
