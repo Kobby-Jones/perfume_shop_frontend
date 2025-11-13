@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, Suspense } from 'react';
 import { ListFilter, Loader2, ArrowUp, ArrowDown } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
@@ -10,7 +10,7 @@ import { useSearchParams } from 'next/navigation';
 import { Product } from '@/lib/types';
 import { ProductCard } from '@/components/product/ProductCard';
 import { FilterSidebar } from '@/components/product/FilterSidebar';
-import { apiFetch } from '@/lib/api/httpClient'; // Import API client
+import { apiFetch } from '@/lib/api/httpClient';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -24,7 +24,7 @@ interface Filters {
   price: number[];
   sort: string;
   search?: string;
-  category?: string; // Will come from URL params
+  category?: string;
 }
 
 // Global interface for the API response
@@ -55,22 +55,16 @@ const fetchProducts = async (filters: Filters): Promise<ProductListResponse> => 
     return data as ProductListResponse;
 };
 
-
 /**
  * Renders a loading skeleton layout for the product grid.
  */
 const ProductGridSkeleton = () => (
   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
     {[...Array(8)].map((_, i) => (
-      // Aspect ratio matches the ProductCard
       <div key={i} className="aspect-[3/4] flex flex-col p-4 space-y-2 border rounded-lg">
-          {/* Image Placeholder */}
           <Skeleton className="aspect-[3/4] w-full" />
-          {/* Title Placeholder */}
           <Skeleton className="h-6 w-3/4" />
-          {/* Price Placeholder */}
           <Skeleton className="h-4 w-1/2" />
-          {/* Button Placeholder */}
           <Skeleton className="h-9 w-full mt-2" />
         </div>
     ))}
@@ -78,9 +72,9 @@ const ProductGridSkeleton = () => (
 );
 
 /**
- * Main Product Listing Page component.
+ * Shop Content Component (uses useSearchParams)
  */
-export default function ShopPage() {
+function ShopContent() {
     const searchParams = useSearchParams();
     
     const [filters, setFilters] = useState<Filters>({
@@ -99,7 +93,6 @@ export default function ShopPage() {
         }));
     }, [searchParams]);
 
-
     // Fetch product data using TanStack Query (React Query)
     const { 
         data: productsData, 
@@ -114,14 +107,12 @@ export default function ShopPage() {
     const products = productsData?.products || [];
     const totalResults = productsData?.totalCount || 0;
 
-
     /**
      * Updates the filter state and triggers a refetch.
      */
     const handleFilterChange = useCallback((newFilters: Partial<Filters>) => {
         setFilters(prev => {
             const updatedFilters = { ...prev, ...newFilters };
-            // Since filter changes update the queryKey, it automatically triggers a refetch.
             return updatedFilters; 
         });
     }, []);
@@ -188,4 +179,19 @@ export default function ShopPage() {
       </div>
     </div>
   );
+}
+
+/**
+ * Main Product Listing Page with Suspense boundary
+ */
+export default function ShopPage() {
+    return (
+        <Suspense fallback={
+            <div className="container py-20">
+                <ProductGridSkeleton />
+            </div>
+        }>
+            <ShopContent />
+        </Suspense>
+    );
 }
