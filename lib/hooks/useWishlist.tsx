@@ -7,7 +7,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '@/lib/api/httpClient'; 
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
-import { Product } from '@/lib/data/mock-products'; // For local product type
+import { Product } from '@/lib/types';
 
 // Define the expected structure
 interface WishlistItem {
