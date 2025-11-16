@@ -2,18 +2,36 @@
 
 'use client';
 
-import { createContext, useContext, useState, useMemo, ReactNode, useEffect, useCallback } from 'react';
-import { apiFetch, setToken, removeToken, getToken } from '@/lib/api/httpClient';
+import {
+  createContext,
+  useContext,
+  useState,
+  useMemo,
+  ReactNode,
+  useEffect,
+  useCallback,
+} from 'react';
+
+import {
+  apiFetch,
+  setToken,
+  removeToken,
+  getToken,
+  setCsrfToken,
+  removeCsrfToken,
+} from '@/lib/api/httpClient';
+
 import { toast } from 'sonner';
 
-// Define the user type based on backend response, including the role
+// ---- TYPES ----
 interface User {
   id: number;
   name: string;
   email: string;
-  role: 'user' | 'admin'; // <-- ADDED ROLE
-  createdAt?: string; 
+  role: 'user' | 'admin';
+  createdAt?: string;
 }
+
 interface AuthContextType {
   isLoggedIn: boolean;
   user: User | null;
@@ -21,62 +39,79 @@ interface AuthContextType {
   register: (name: string, email: string, password: string) => Promise<void>;
   logout: () => void;
   isLoading: boolean;
-  refetchUser: () => Promise<void>; // Added for manual refresh
+  refetchUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Define API URLs for reusability
+// ---- API URLS ----
 const API_URLS = {
   ME: '/auth/me',
   LOGIN: '/auth/login',
   REGISTER: '/auth/register',
   LOGOUT: '/auth/logout',
+  CSRF_TOKEN: '/csrf-token',
 };
 
-/**
- * Authentication Provider
- * Handles session management, login, registration, and token validation with backend API.
- */
+// ---- FETCH CSRF TOKEN ----
+const fetchCsrfToken = async () => {
+  try {
+    const csrfData = await apiFetch(API_URLS.CSRF_TOKEN);
+    if (csrfData.csrfToken) {
+      setCsrfToken(csrfData.csrfToken);
+    }
+  } catch (e) {
+    console.error('Failed to fetch CSRF token:', e);
+  }
+};
+
+// =======================================================
+//                AUTH PROVIDER
+// =======================================================
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // --- Core Session Verification ---
+  // ---- REFRESH SESSION ----
   const refetchUser = useCallback(async () => {
     const token = getToken();
     if (!token) {
-        setIsLoggedIn(false);
-        setUser(null);
-        setIsLoading(false);
-        return;
+      setIsLoggedIn(false);
+      setUser(null);
+      setIsLoading(false);
+      removeCsrfToken(); // IMPORTANT
+      return;
     }
 
     try {
-      // Validate token with the backend and fetch user details
       const data = await apiFetch(API_URLS.ME);
-      
+
       setIsLoggedIn(true);
       setUser(data.user);
+
+      // Fetch CSRF after session revalidation
+      await fetchCsrfToken();
     } catch (error) {
       console.error('Session validation failed:', error);
-      // If validation fails, assume token is stale/expired
+
       removeToken();
       setIsLoggedIn(false);
       setUser(null);
+      removeCsrfToken(); // clear CSRF
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  // Initial load effect
+  // Load session on mount
   useEffect(() => {
     refetchUser();
   }, [refetchUser]);
 
-  // --- Auth Actions ---
-  
+  // =======================================================
+  //                    LOGIN
+  // =======================================================
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
@@ -84,19 +119,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       });
-      
+
       setToken(data.token);
       setIsLoggedIn(true);
       setUser(data.user);
-      
+
+      // Fetch CSRF token
+      await fetchCsrfToken();
     } catch (error) {
       setIsLoading(false);
-      throw error; 
+      throw error;
     } finally {
       setIsLoading(false);
     }
   };
 
+  // =======================================================
+  //                    REGISTER
+  // =======================================================
   const register = async (name: string, email: string, password: string) => {
     setIsLoading(true);
     try {
@@ -104,30 +144,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: 'POST',
         body: JSON.stringify({ name, email, password }),
       });
-      
+
       setToken(data.token);
       setIsLoggedIn(true);
-      setUser(data.user); 
-      
+      setUser(data.user);
+
+      // Fetch CSRF token
+      await fetchCsrfToken();
     } catch (error) {
       setIsLoading(false);
       throw error;
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
-};
+  };
 
+  // =======================================================
+  //                    LOGOUT
+  // =======================================================
   const logout = () => {
     apiFetch(API_URLS.LOGOUT, { method: 'POST' }).catch((err) =>
       console.error('Logout API failed:', err)
     );
 
     removeToken();
+    removeCsrfToken();
     setIsLoggedIn(false);
     setUser(null);
-    toast.info("You have been signed out.");
+
+    toast.info('You have been signed out.');
   };
 
+  // =======================================================
+  //                    CONTEXT VALUE
+  // =======================================================
   const value = useMemo(
     () => ({
       isLoggedIn,
@@ -144,10 +194,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
+// ---- PUBLIC HOOK ----
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+  if (!context) {
+    throw new Error('useAuth must be used within AuthProvider');
   }
   return context;
 };
