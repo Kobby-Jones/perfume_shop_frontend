@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Phone } from 'lucide-react';
 import React from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -17,12 +17,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { apiFetch } from '@/lib/api/httpClient';
 import { useAlert } from '@/components/shared/ModalAlert';
 
-// Define the schema for admin-created users
+// Updated schema to use phoneNumber instead of email
 const userSchema = z.object({
   name: z.string().min(2, 'Name is required.'),
-  email: z.string().email('Invalid email address.'),
+  phoneNumber: z.string().min(10, 'Enter a valid phone number (e.g., 024XXXXXXX)'), // Changed to phoneNumber
   password: z.string().min(8, 'Password must be at least 8 characters.'),
-  role: z.enum(['user', 'admin'], { message: 'Role is required.' }),
+  role: z.enum(['user', 'admin', 'staff'], { message: 'Role is required.' }),
 });
 
 type UserFormData = z.infer<typeof userSchema>;
@@ -44,18 +44,17 @@ export function UserForm({ open, onOpenChange }: UserFormProps) {
     resolver: zodResolver(userSchema),
     defaultValues: {
       name: '',
-      email: '',
+      phoneNumber: '', // Changed
       password: '',
-      role: 'user', // Default to standard user
+      role: 'user',
     },
   });
   
   React.useEffect(() => {
-    // Reset form errors and values when modal opens
     if (open) {
         form.reset({
             name: '',
-            email: '',
+            phoneNumber: '', // Changed
             password: '',
             role: 'user',
         });
@@ -76,14 +75,14 @@ export function UserForm({ open, onOpenChange }: UserFormProps) {
         onOpenChange(false);
         alert({ 
             title: "User Created", 
-            message: data.message || `User ${form.getValues('email')} created successfully with role: ${form.getValues('role').toUpperCase()}.`, 
+            message: data.message || `User ${form.getValues('phoneNumber')} created successfully with role: ${form.getValues('role').toUpperCase()}.`, 
             variant: 'success' 
         });
     },
     onError: (error: any) => {
         alert({ 
             title: "Creation Failed", 
-            message: error.message || "Could not create user account. Email may be taken.", 
+            message: error.message || "Could not create user account. Phone number may be taken.", 
             variant: 'error' 
         });
     },
@@ -111,10 +110,16 @@ export function UserForm({ open, onOpenChange }: UserFormProps) {
                 </FormItem>
             )} />
             
-            <FormField control={form.control} name="email" render={({ field }) => (
+            {/* Phone Number Field */}
+            <FormField control={form.control} name="phoneNumber" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Email Address</FormLabel>
-                  <FormControl><Input type="email" {...field} placeholder="user@example.com" /></FormControl>
+                  <FormLabel>Phone Number</FormLabel>
+                  <FormControl>
+                    <div className="relative">
+                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input {...field} placeholder="024XXXXXXX" className="pl-10" />
+                    </div>
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
             )} />
@@ -141,7 +146,8 @@ export function UserForm({ open, onOpenChange }: UserFormProps) {
                       </FormControl>
                       <SelectContent>
                           <SelectItem value="user">User (Customer)</SelectItem>
-                          <SelectItem value="admin">Admin (Staff)</SelectItem>
+                          <SelectItem value="staff">Staff (Day-to-Day Ops)</SelectItem>
+                          <SelectItem value="admin">Admin (Full Access)</SelectItem>
                       </SelectContent>
                   </Select>
                   <FormMessage />

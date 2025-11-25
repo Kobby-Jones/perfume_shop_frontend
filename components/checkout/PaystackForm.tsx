@@ -2,94 +2,68 @@
 
 'use client';
 
-import { usePaystack } from '@/lib/hooks/usePaystack';
 import { Button } from '@/components/ui/button';
-import { Loader2, Zap } from 'lucide-react';
+import { Loader2, Zap, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { useState } from 'react';
 
 interface PaystackFormProps {
-    amount: number; // Amount in kobo/cents
+    amount: number; 
     email: string;
-    reference: string; // Use the reference from backend
+    accessCode?: string;
+    reference?: string;
+    authorizationUrl?: string;
     onSuccess: (reference: string) => void;
-    currency?: string;
 }
 
-export function PaystackForm({ amount, email, reference, onSuccess }: PaystackFormProps) {
-    const { initializePayment, scriptLoaded } = usePaystack();
+export function PaystackForm({ amount, email, accessCode, reference, authorizationUrl, onSuccess }: PaystackFormProps) {
     const [isProcessing, setIsProcessing] = useState(false);
 
-    const displayAmount = (Number(amount) / 100).toFixed(2);
-
-    const handleSuccess = (paystackReference: any) => {
-        setIsProcessing(false);
-        // Pass the reference back to verify
-        onSuccess(paystackReference.reference || reference);
-    };
-
-    const handleClose = () => {
-        setIsProcessing(false);
-        toast.info('Payment cancelled. You can try again when ready.');
-    };
-
     const startPayment = () => {
-        console.log('Starting payment with:', { amount, email, reference, scriptLoaded });
-
-        if (!scriptLoaded) {
-            toast.error("Payment system is loading. Please wait a moment.");
+        if (!authorizationUrl) {
+            toast.error('Payment link not ready. Please try again.');
             return;
         }
 
-        if (amount <= 0) {
-            toast.error("Invalid payment amount.");
-            console.error('Invalid amount:', amount);
-            return;
-        }
-        const publicKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY;
-        if (!publicKey) {
-            toast.error("Payment configuration error. Please contact support.");
-            console.error('NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY is not set');
-            return;
-        }
+        console.log('🚀 Redirecting to Paystack:', authorizationUrl);
         
-        setIsProcessing(true);
-        toast.info("Opening secure payment gateway...");
-        
-        const config = {
-            publicKey,
-            email,
-            amount,
-            reference,
-            onSuccess: handleSuccess,
-            onClose: handleClose,
-            currency: 'GHS',
-        };
-
-        console.log('Initializing payment with config:', config);
-        initializePayment(config);
+        // Redirect to Paystack checkout page
+        window.location.href = authorizationUrl;
     };
-
-    const buttonDisabled = isProcessing || !scriptLoaded || amount <= 0;
 
     return (
-        <Button 
-            type="button"
-            className="w-full text-lg h-12 bg-green-600 hover:bg-green-700" 
-            onClick={startPayment}
-            disabled={buttonDisabled}
-        >
-            {isProcessing ? (
-                <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" /> 
-                    Opening Payment Gateway...
-                </>
-            ) : (
-                <>
-                    <Zap className="mr-2 h-5 w-5" /> 
-                    Pay GHS{displayAmount} Now
-                </>
-            )}
-        </Button>
+        <div className="space-y-4">
+            <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg text-sm text-yellow-800">
+                <strong>Action Required:</strong> Click the button below to complete your secure payment.
+            </div>
+            
+            <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg text-sm text-blue-800">
+                <p>You will be redirected to Paystack's secure payment page.</p>
+            </div>
+
+            <Button 
+                type="button"
+                className="w-full text-lg h-12 bg-green-600 hover:bg-green-700 shadow-md transition-all" 
+                onClick={startPayment}
+                disabled={isProcessing || !authorizationUrl}
+            >
+                {isProcessing ? (
+                    <>
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> 
+                        Processing...
+                    </>
+                ) : (
+                    <>
+                        <Zap className="mr-2 h-5 w-5" /> 
+                        Pay GHS {(amount / 100).toFixed(2)} Now
+                        <ExternalLink className="ml-2 h-4 w-4" />
+                    </>
+                )}
+            </Button>
+            
+            <p className="text-xs text-center text-muted-foreground">
+                Order #{reference} • Secured by Paystack
+            </p>
+        </div>
     );
 }

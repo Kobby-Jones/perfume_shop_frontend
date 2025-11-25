@@ -5,9 +5,10 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
-import { DollarSign, ShoppingBag, AlertTriangle, Users, Loader2, Package, ArrowRight, TrendingUp, TrendingDown } from 'lucide-react';
+import { DollarSign, ShoppingBag, AlertTriangle, Users, Loader2, Package, ArrowRight, TrendingUp } from 'lucide-react';
 import { apiFetch } from '@/lib/api/httpClient';
 import Link from 'next/link';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 interface DashboardStats {
     totalRevenue: number;
@@ -74,13 +75,13 @@ const fetchDashboardStats = async (): Promise<DashboardStats> => {
 const fetchRecentOrders = async (): Promise<RecentOrder[]> => {
     try {
         const data = await apiFetch('/admin/orders');
-        // Return first 5 orders for recent orders section
         return (data?.orders || []).slice(0, 5);
     } catch (error) {
         console.error('Failed to fetch recent orders:', error);
         return [];
     }
 };
+
 const fetchTopProducts = async (): Promise<TopProduct[]> => {
     try {
         const data = await apiFetch('/admin/reports/top-products');
@@ -116,59 +117,155 @@ const getStatusColor = (status: string) => {
 };
 
 export default function AdminDashboardOverview() {
+    const { user } = useAuth();
+    const isAdmin = user?.role === 'admin';
+
+    // Only fetch Financial Stats if Admin
     const { data: stats, isLoading: statsLoading, isError: statsError } = useQuery<DashboardStats>({
         queryKey: ['adminDashboardStats'],
         queryFn: fetchDashboardStats,
         staleTime: 1000 * 60 * 5,
+        enabled: isAdmin, // Prevents 403 for staff
     });
 
+    // Everyone (admin & staff) can see Recent Orders
     const { data: recentOrders, isLoading: ordersLoading } = useQuery<RecentOrder[]>({
         queryKey: ['adminRecentOrders'],
         queryFn: fetchRecentOrders,
         staleTime: 1000 * 60 * 2,
     });
 
+    // Only fetch Top Products if Admin (contains revenue data)
     const { data: topProducts, isLoading: productsLoading } = useQuery<TopProduct[]>({
         queryKey: ['adminTopProducts'],
         queryFn: fetchTopProducts,
         staleTime: 1000 * 60 * 5,
+        enabled: isAdmin,
     });
 
+    // --- STAFF VIEW ---
+    if (!isAdmin) {
+        return (
+            <div className="space-y-6">
+                <h1 className="text-2xl md:text-3xl font-bold">Staff Dashboard</h1>
+                
+                {/* Welcome Banner */}
+                <div className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-xl">
+                    <h2 className="text-lg font-semibold text-blue-900">Welcome back, {user?.name}!</h2>
+                    <p className="text-blue-700 text-sm mt-1">You have access to manage orders, products, inventory, and reviews.</p>
+                </div>
+
+                {/* Staff Quick Links */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <Link href="/admin/orders" className="group p-6 bg-white border rounded-xl shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3">
+                        <div className="p-3 bg-primary/10 rounded-full group-hover:bg-primary/20 transition-colors">
+                            <ShoppingBag className="w-6 h-6 text-primary" />
+                        </div>
+                        <span className="font-semibold text-sm">Manage Orders</span>
+                    </Link>
+                    <Link href="/admin/products" className="group p-6 bg-white border rounded-xl shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3">
+                        <div className="p-3 bg-orange-100 rounded-full group-hover:bg-orange-200 transition-colors">
+                            <Package className="w-6 h-6 text-orange-600" />
+                        </div>
+                        <span className="font-semibold text-sm">Update Products</span>
+                    </Link>
+                    <Link href="/admin/inventory" className="group p-6 bg-white border rounded-xl shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3">
+                        <div className="p-3 bg-purple-100 rounded-full group-hover:bg-purple-200 transition-colors">
+                            <AlertTriangle className="w-6 h-6 text-purple-600" />
+                        </div>
+                        <span className="font-semibold text-sm">Inventory</span>
+                    </Link>
+                    <Link href="/admin/reviews" className="group p-6 bg-white border rounded-xl shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center gap-3">
+                        <div className="p-3 bg-green-100 rounded-full group-hover:bg-green-200 transition-colors">
+                            <Users className="w-6 h-6 text-green-600" />
+                        </div>
+                        <span className="font-semibold text-sm">Reviews</span>
+                    </Link>
+                </div>
+
+                {/* Recent Orders Table */}
+                <div className="bg-white p-4 md:p-6 rounded-xl shadow-md">
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-lg md:text-xl font-bold">Recent Incoming Orders</h2>
+                        <Link href="/admin/orders" className="text-primary hover:text-primary/80 text-sm flex items-center gap-1">
+                            View All <ArrowRight className="w-4 h-4" />
+                        </Link>
+                    </div>
+                    
+                    {ordersLoading ? (
+                        <div className="flex items-center justify-center h-40">
+                            <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                        </div>
+                    ) : recentOrders && recentOrders.length > 0 ? (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead className="border-b">
+                                    <tr className="text-left text-gray-500">
+                                        <th className="pb-3 font-medium">Order #</th>
+                                        <th className="pb-3 font-medium">Customer</th>
+                                        <th className="pb-3 font-medium">Amount</th>
+                                        <th className="pb-3 font-medium">Status</th>
+                                        <th className="pb-3 font-medium">Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {recentOrders.map((order) => (
+                                        <tr key={order.id} className="border-b last:border-0 hover:bg-gray-50">
+                                            <td className="py-3 font-medium text-primary">#{order.id}</td>
+                                            <td className="py-3">{order.user?.name || 'Unknown User'}</td>
+                                            <td className="py-3 font-semibold">{formatGHS(order.orderTotal || 0)}</td>
+                                            <td className="py-3">
+                                                <span className={cn("px-2 py-1 rounded-full text-xs font-medium", getStatusColor(order.status))}>
+                                                    {order.status}
+                                                </span>
+                                            </td>
+                                            <td className="py-3 text-gray-500">{formatDate(order.createdAt)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    ) : (
+                        <div className="h-40 flex items-center justify-center text-gray-500">
+                            No recent orders found
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
+    // --- ADMIN VIEW ---
     const statCards = [
         { 
             title: 'Total Revenue', 
             value: stats?.totalRevenue != null ? formatGHS(stats.totalRevenue) : 'N/A', 
             icon: 'DollarSign', 
             color: 'text-green-600', 
-            dataKey: 'totalRevenue'
         },
         { 
             title: 'Inventory Value', 
             value: stats?.totalInventoryValue != null ? formatGHS(stats.totalInventoryValue) : 'N/A', 
             icon: 'Package', 
             color: 'text-purple-600', 
-            dataKey: 'totalInventoryValue'
         },
         { 
             title: 'New Orders (7D)', 
             value: stats?.newOrdersLast7D != null ? stats.newOrdersLast7D.toString() : 'N/A', 
             icon: 'ShoppingBag', 
             color: 'text-primary', 
-            dataKey: 'newOrdersLast7D'
         },
         { 
             title: 'Low Stock Items', 
             value: stats?.lowStockItems != null ? stats.lowStockItems.toString() : 'N/A', 
             icon: 'AlertTriangle', 
             color: 'text-yellow-600', 
-            dataKey: 'lowStockItems'
         },
         { 
             title: 'Total Customers', 
             value: stats?.totalCustomers != null ? stats.totalCustomers.toString() : 'N/A', 
             icon: 'Users', 
             color: 'text-blue-600', 
-            dataKey: 'totalCustomers'
         },
     ];
     
@@ -197,14 +294,14 @@ export default function AdminDashboardOverview() {
                     
                     return (
                         <div key={stat.title} className="bg-white p-4 md:p-6 rounded-xl shadow-md border-t-4 border-primary/50">
-                        <div className="flex justify-between items-center mb-2">
-                            <p className="text-xs md:text-sm font-medium text-gray-500">{stat.title}</p>
-                            {Icon && <Icon className={cn("w-5 h-5 md:w-6 md:h-6 flex-shrink-0", stat.color)} />}
+                            <div className="flex justify-between items-center mb-2">
+                                <p className="text-xs md:text-sm font-medium text-gray-500">{stat.title}</p>
+                                {Icon && <Icon className={cn("w-5 h-5 md:w-6 md:h-6 flex-shrink-0", stat.color)} />}
+                            </div>
+                            <p className="text-lg md:text-xl lg:text-2xl font-extrabold break-all leading-tight">
+                                {stat.value}
+                            </p>
                         </div>
-                        <p className="text-lg md:text-xl lg:text-2xl font-extrabold break-all leading-tight">
-                            {stat.value}
-                        </p>
-                    </div>
                     );
                 })}
             </div>
@@ -235,20 +332,20 @@ export default function AdminDashboardOverview() {
                                 </tr>
                             </thead>
                             <tbody>
-                            {recentOrders.map((order) => (
-                                <tr key={order.id} className="border-b last:border-0 hover:bg-gray-50">
-                                    <td className="py-3 font-medium text-primary">#{order.id}</td>
-                                    <td className="py-3">{order.user?.name || 'Unknown User'}</td>
-                                    <td className="py-3 font-semibold">{formatGHS(order.orderTotal || 0)}</td>
-                                    <td className="py-3">
-                                        <span className={cn("px-2 py-1 rounded-full text-xs font-medium", getStatusColor(order.status))}>
-                                            {order.status}
-                                        </span>
-                                    </td>
-                                    <td className="py-3 text-gray-500">{formatDate(order.createdAt)}</td>
-                                </tr>
-                            ))}
-                        </tbody>
+                                {recentOrders.map((order) => (
+                                    <tr key={order.id} className="border-b last:border-0 hover:bg-gray-50">
+                                        <td className="py-3 font-medium text-primary">#{order.id}</td>
+                                        <td className="py-3">{order.user?.name || 'Unknown User'}</td>
+                                        <td className="py-3 font-semibold">{formatGHS(order.orderTotal || 0)}</td>
+                                        <td className="py-3">
+                                            <span className={cn("px-2 py-1 rounded-full text-xs font-medium", getStatusColor(order.status))}>
+                                                {order.status}
+                                            </span>
+                                        </td>
+                                        <td className="py-3 text-gray-500">{formatDate(order.createdAt)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
                         </table>
                     </div>
                 ) : (

@@ -1,197 +1,114 @@
 // app/shop/page.tsx
 
-'use client';
-
-import { useState, useMemo, useEffect, useCallback, Suspense } from 'react';
-import { ListFilter, Loader2, ArrowUp, ArrowDown } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
-import { useSearchParams } from 'next/navigation';
-
-import { Product } from '@/lib/types';
+import { Metadata } from 'next';
 import { ProductCard } from '@/components/product/ProductCard';
 import { FilterSidebar } from '@/components/product/FilterSidebar';
-import { apiFetch } from '@/lib/api/httpClient';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Label } from '@/components/ui/label';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Filter } from 'lucide-react';
+import { Product } from '@/lib/types';
 
-/**
- * Interface for the active filters state.
- */
-interface Filters {
-  brands: string[];
-  price: number[];
-  sort: string;
-  search?: string;
-  category?: string;
-}
-
-// Global interface for the API response
-interface ProductListResponse {
-    products: Product[];
-    totalCount: number;
-}
-
-/**
- * API fetch function with dynamic query parameters
- */
-const fetchProducts = async (filters: Filters): Promise<ProductListResponse> => {
-    const params = new URLSearchParams();
-    
-    // Convert array filters to repeating parameters
-    filters.brands.forEach(brand => params.append('brand', brand));
-    
-    // Price range
-    params.append('minPrice', filters.price[0].toString());
-    params.append('maxPrice', filters.price[1].toString());
-
-    // Sort, Search, and Category
-    if (filters.sort) params.append('sort', filters.sort);
-    if (filters.search) params.append('search', filters.search);
-    if (filters.category) params.append('category', filters.category);
-
-    const data = await apiFetch(`/products?${params.toString()}`);
-    return data as ProductListResponse;
+export const metadata: Metadata = {
+  title: 'Shop All Fragrances | Scentia',
+  description: 'Explore our extensive collection of luxury perfumes for men and women.',
 };
 
-/**
- * Renders a loading skeleton layout for the product grid.
- */
-const ProductGridSkeleton = () => (
-  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
-    {[...Array(8)].map((_, i) => (
-      <div key={i} className="aspect-[3/4] flex flex-col p-4 space-y-2 border rounded-lg">
-          <Skeleton className="aspect-[3/4] w-full" />
-          <Skeleton className="h-6 w-3/4" />
-          <Skeleton className="h-4 w-1/2" />
-          <Skeleton className="h-9 w-full mt-2" />
-        </div>
-    ))}
-  </div>
-);
+// Type for SearchParams
+interface ShopPageProps {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}
 
-/**
- * Shop Content Component (uses useSearchParams)
- */
-function ShopContent() {
-    const searchParams = useSearchParams();
-    
-    const [filters, setFilters] = useState<Filters>({
-      brands: [],
-      price: [0, 1000], 
-      sort: 'name-asc', 
-      category: searchParams.get('category') || undefined,
-    });
-    
-    // Update category filter when URL changes
-    useEffect(() => {
-        const urlCategory = searchParams.get('category');
-        setFilters(prev => ({ 
-            ...prev, 
-            category: urlCategory || undefined 
-        }));
-    }, [searchParams]);
-
-    // Fetch product data using TanStack Query (React Query)
-    const { 
-        data: productsData, 
-        isLoading, 
-        isError,
-        refetch
-    } = useQuery<ProductListResponse>({
-        queryKey: ['products', filters],
-        queryFn: () => fetchProducts(filters),
-    });
-    
-    const products = productsData?.products || [];
-    const totalResults = productsData?.totalCount || 0;
-
-    /**
-     * Updates the filter state and triggers a refetch.
-     */
-    const handleFilterChange = useCallback((newFilters: Partial<Filters>) => {
-        setFilters(prev => {
-            const updatedFilters = { ...prev, ...newFilters };
-            return updatedFilters; 
-        });
-    }, []);
-
-    /**
-     * Updates the sorting selection.
-     */
-    const handleSortChange = useCallback((newSort: string) => {
-        handleFilterChange({ sort: newSort });
-    }, [handleFilterChange]);
-
-  // --- Render Logic ---
-  if (isError) {
-    return <div className="container py-20 text-center text-red-600">Failed to load products. Please try again.</div>;
-  }
+// Server Fetch Function
+async function getProducts(searchParams: any) {
+  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://scentia-api.onrender.com/api';
   
+  // Construct Query String
+  const params = new URLSearchParams();
+  if (searchParams.category) params.append('category', searchParams.category);
+  if (searchParams.brand) params.append('brand', searchParams.brand);
+  if (searchParams.minPrice) params.append('minPrice', searchParams.minPrice);
+  if (searchParams.maxPrice) params.append('maxPrice', searchParams.maxPrice);
+  if (searchParams.search) params.append('search', searchParams.search);
+  if (searchParams.sort) params.append('sort', searchParams.sort);
+  
+  // Pagination defaults
+  const page = searchParams.page || '1';
+  params.append('page', page);
+  params.append('limit', '12');
+
+  try {
+    const res = await fetch(`${baseUrl}/products?${params.toString()}`, { 
+      cache: 'no-store' // Dynamic fetching
+    });
+    
+    if (!res.ok) throw new Error('Failed to fetch products');
+    return res.json();
+  } catch (error) {
+    console.error(error);
+    return { products: [], totalCount: 0 };
+  }
+}
+
+export default async function ShopPage({ searchParams }: ShopPageProps) {
+  // Await searchParams before accessing properties
+  const resolvedSearchParams = await searchParams;
+  
+  // 1. Fetch Data on Server
+  const { products, totalCount } = await getProducts(resolvedSearchParams);
+  const hasProducts = products && products.length > 0;
+
   return (
-    <div className="container flex flex-col lg:flex-row gap-6 md:gap-10">
-      
-      {/* 1. Desktop Filter Sidebar / Mobile Filter Trigger */}
-      <FilterSidebar onFilterChange={handleFilterChange} />
+    <div className="container py-8">
+      <div className="flex items-baseline justify-between border-b pb-6 mb-8">
+        <h1 className="text-3xl font-bold tracking-tight">
+          {resolvedSearchParams.search ? `Search: "${resolvedSearchParams.search}"` : 'All Fragrances'}
+        </h1>
+        <span className="text-muted-foreground">{totalCount} products found</span>
+      </div>
 
-      {/* 2. Product Content Area */}
-      <div className="flex-1 min-w-0">
-        
-        {/* Top Control Bar (Sorting and Results Count) */}
-        <div className="flex justify-between items-center mb-6 border-b pb-4">
-          <h1 className="text-2xl font-bold text-foreground">
-            Shop All Scents <span className="text-foreground/60">({totalResults} Results)</span>
-          </h1>
-
-          {/* Sorting Dropdown */}
-          <div className="flex items-center space-x-2">
-            <Label htmlFor="sort-select" className="hidden sm:block text-sm font-medium">Sort by:</Label>
-            <Select value={filters.sort} onValueChange={handleSortChange}>
-              <SelectTrigger id="sort-select" className="w-[180px]">
-                <SelectValue placeholder="Sort by" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="name-asc">Name (A-Z)</SelectItem>
-                <SelectItem value="price-asc">Price (Low to High)</SelectItem>
-                <SelectItem value="price-desc">Price (High to Low)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+      <div className="flex gap-8">
+        {/* Desktop Sidebar */}
+        <div className="hidden lg:block w-64 flex-shrink-0">
+          <FilterSidebar />
         </div>
 
-        {/* Product Grid */}
-        {isLoading ? (
-          <ProductGridSkeleton />
-        ) : products.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
-            {products.map(product => (
-              <ProductCard key={product.id} product={product} />
-            ))}
+        <div className="flex-1">
+          {/* Mobile Filter Trigger */}
+          <div className="lg:hidden mb-6">
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="outline" className="w-full">
+                  <Filter className="mr-2 h-4 w-4" /> Filters
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left">
+                <div className="mt-6">
+                  <FilterSidebar />
+                </div>
+              </SheetContent>
+            </Sheet>
           </div>
-        ) : (
-          <div className="text-center py-20 bg-secondary/50 rounded-lg">
-            <ListFilter className="w-10 h-10 text-foreground/50 mx-auto mb-4" />
-            <p className="text-xl font-semibold">No products match your current filters.</p>
-            <p className="text-foreground/70">Try adjusting your price range or clearing some filters.</p>
-          </div>
-        )}
+
+          {/* Product Grid */}
+          {hasProducts ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-6">
+              {products.map((product: Product) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-20 bg-muted/30 rounded-xl">
+              <h3 className="text-lg font-semibold">No products found</h3>
+              <p className="text-muted-foreground mt-2">
+                Try adjusting your filters or search terms.
+              </p>
+            </div>
+          )}
+          
+          {/* Simple Pagination (Optional - Add more robust logic if needed) */}
+          {/* This is a placeholder. Robust pagination requires client-side logic or simple Link components */}
+        </div>
       </div>
     </div>
   );
-}
-
-/**
- * Main Product Listing Page with Suspense boundary
- */
-export default function ShopPage() {
-    return (
-        <Suspense fallback={
-            <div className="container py-20">
-                <ProductGridSkeleton />
-            </div>
-        }>
-            <ShopContent />
-        </Suspense>
-    );
 }

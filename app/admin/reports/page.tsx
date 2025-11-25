@@ -4,13 +4,14 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { BarChart, PieChart, Pie, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
-import { BarChart as BarChartIcon, DollarSign, Users, RefreshCw, TrendingUp } from 'lucide-react';
+import { BarChart as BarChartIcon, DollarSign, Users, RefreshCw, TrendingUp, Crown, Tag } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { apiFetch } from '@/lib/api/httpClient';
 import { useState } from 'react';
 
+// --- Types ---
 interface ReportsOverview {
     totalRevenue: number;
     totalOrders: number;
@@ -26,21 +27,41 @@ interface SalesDataPoint {
     orders: number;
 }
 
+/**
+ * Include an index signature so this matches Recharts' ChartDataInput (which allows arbitrary string keys).
+ * This keeps the explicit fields while satisfying the library's type expectation.
+ */
 interface CategoryDataPoint {
     name: string;
     value: number;
     color: string;
-    [key: string]: string | number;
+    [key: string]: any;
 }
 
+// NEW TYPES
+interface TopCustomer {
+    id: number;
+    name: string;
+    email: string;
+    totalOrders: number;
+    totalSpent: number;
+}
+
+interface DiscountPerf {
+    code: string;
+    usageCount: number;
+    totalRevenue: number;
+    totalDiscountGiven: number;
+}
+
+// --- Helpers ---
 const formatGHS = (amount: number, decimals?: number) => {
-  const formatter = new Intl.NumberFormat('en-GH', { 
+  return new Intl.NumberFormat('en-GH', { 
     style: 'currency', 
     currency: 'GHS',
     minimumFractionDigits: decimals ?? 2,
     maximumFractionDigits: decimals ?? 2
-  });
-  return formatter.format(amount);
+  }).format(amount);
 };
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -50,7 +71,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
         <p className="font-semibold mb-1 truncate">{label}</p>
         {payload.map((entry: any, index: number) => (
           <p key={index} style={{ color: entry.color }} className="truncate">
-            {entry.name}: {typeof entry.value === 'number' && entry.name.toLowerCase().includes('revenue') 
+            {entry.name}: {typeof entry.value === 'number' && (entry.name.toLowerCase().includes('revenue') || entry.name.toLowerCase().includes('spent'))
               ? formatGHS(entry.value, 0) 
               : entry.value}
           </p>
@@ -61,243 +82,207 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-// Custom pie chart label for better mobile responsiveness
 const renderCustomLabel = (entry: any, isMobile: boolean) => {
-  if (isMobile) {
-    // On mobile, show shorter labels
-    return `${entry.name}`;
-  }
-  return `${entry.name}: ${formatGHS(entry.value, 0)}`;
+  return isMobile ? `${entry.name}` : `${entry.name}: ${formatGHS(entry.value, 0)}`;
 };
 
 export default function AdminReportsPage() {
     const [months, setMonths] = useState(6);
     const [isMobile, setIsMobile] = useState(false);
 
-    // Detect mobile on mount
-    useState(() => {
-        if (typeof window !== 'undefined') {
-            setIsMobile(window.innerWidth < 768);
-            const handleResize = () => setIsMobile(window.innerWidth < 768);
-            window.addEventListener('resize', handleResize);
-            return () => window.removeEventListener('resize', handleResize);
-        }
-    });
-
-    // Fetch overview metrics
-    const { data: overview, isLoading: overviewLoading, refetch: refetchOverview } = useQuery<{ metrics: ReportsOverview }>({
+    // --- Data Fetching ---
+    const { data: overview, isLoading: l1, refetch: r1 } = useQuery<{ metrics: ReportsOverview }>({
         queryKey: ['adminReportsOverview', months],
         queryFn: () => apiFetch(`/admin/reports/overview?months=${months}`),
-        staleTime: 1000 * 60 * 5,
     });
 
-    // Fetch monthly sales data
-    const { data: salesResponse, isLoading: salesLoading, refetch: refetchSales } = useQuery<{ salesData: SalesDataPoint[] }>({
+    const { data: salesResponse, isLoading: l2, refetch: r2 } = useQuery<{ salesData: SalesDataPoint[] }>({
         queryKey: ['adminMonthlySales', months],
         queryFn: () => apiFetch(`/admin/reports/monthly-sales?months=${months}`),
-        staleTime: 1000 * 60 * 5,
     });
 
-    // Fetch category sales data
-    const { data: categoryResponse, isLoading: categoryLoading, refetch: refetchCategory } = useQuery<{ categorySales: CategoryDataPoint[] }>({
+    const { data: categoryResponse, isLoading: l3, refetch: r3 } = useQuery<{ categorySales: CategoryDataPoint[] }>({
         queryKey: ['adminCategorySales', months],
         queryFn: () => apiFetch(`/admin/reports/category-sales?months=${months}`),
-        staleTime: 1000 * 60 * 5,
     });
 
-    const isLoading = overviewLoading || salesLoading || categoryLoading;
+    // NEW Queries
+    const { data: topCustomersData, isLoading: l4, refetch: r4 } = useQuery<{ topCustomers: TopCustomer[] }>({
+        queryKey: ['adminTopCustomers', months],
+        queryFn: () => apiFetch(`/admin/reports/top-customers?months=${months}`),
+    });
+
+    const { data: discountData, isLoading: l5, refetch: r5 } = useQuery<{ discountPerformance: DiscountPerf[] }>({
+        queryKey: ['adminDiscountPerf', months],
+        queryFn: () => apiFetch(`/admin/reports/discounts?months=${months}`),
+    });
+
+    const isLoading = l1 || l2 || l3 || l4 || l5;
     const metrics = overview?.metrics;
     const salesData = salesResponse?.salesData || [];
     const categoryData = categoryResponse?.categorySales || [];
+    const topCustomers = topCustomersData?.topCustomers || [];
+    const discounts = discountData?.discountPerformance || [];
 
     const handleRefresh = () => {
-        refetchOverview();
-        refetchSales();
-        refetchCategory();
+        r1(); r2(); r3(); r4(); r5();
     };
 
     if (isLoading && !metrics) {
-        return (
-          <div className="flex justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-          </div>
-        );
+        return <div className="flex justify-center py-12"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
     }
     
     return (
-        <div className="space-y-4 md:space-y-8 pb-6">
+        <div className="space-y-6 pb-10">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <h1 className="text-xl md:text-2xl lg:text-3xl font-bold flex items-center">
-                    <BarChartIcon className="w-5 h-5 md:w-6 md:h-6 lg:w-8 lg:h-8 mr-2 flex-shrink-0" /> 
-                    <span className="truncate">Sales & Analytics</span>
+                <h1 className="text-2xl md:text-3xl font-bold flex items-center">
+                    <BarChartIcon className="w-6 h-6 md:w-8 md:h-8 mr-2" /> 
+                    Sales & Analytics
                 </h1>
-                <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+                <div className="flex gap-2">
                     <select 
                         value={months} 
                         onChange={(e) => setMonths(parseInt(e.target.value))}
-                        className="px-3 py-2 border rounded-md text-xs md:text-sm flex-1 sm:flex-initial min-w-0"
+                        className="px-3 py-2 border rounded-md text-sm"
                     >
                         <option value={3}>Last 3 Months</option>
                         <option value={6}>Last 6 Months</option>
                         <option value={12}>Last 12 Months</option>
                     </select>
-                    <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={handleRefresh}
-                        disabled={isLoading}
-                        className="flex-shrink-0"
-                    >
-                        <RefreshCw className={`w-3 h-3 md:w-4 md:h-4 mr-1 md:mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-                        <span className="text-xs md:text-sm">Refresh</span>
+                    <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading}>
+                        <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} /> Refresh
                     </Button>
                 </div>
             </div>
 
-            {/* Key Metrics Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 lg:gap-6">
-                <Card className="shadow-lg overflow-hidden">
-                    <CardHeader className="pb-2 px-4 pt-4">
-                      <CardTitle className="text-xs md:text-sm lg:text-base flex items-center gap-2">
-                        <DollarSign className="w-4 h-4 text-green-600 flex-shrink-0" />
-                        <span className="truncate">Total Revenue ({metrics?.period})</span>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="px-4 pb-4">
-                      <div className="text-xl md:text-2xl lg:text-3xl font-extrabold text-green-600 break-all leading-tight">
-                        {formatGHS(metrics?.totalRevenue || 0, 0)}
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {metrics?.totalOrders || 0} orders
-                      </p>
+            {/* 1. Key Metrics Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <Card className="shadow-sm border-l-4 border-l-green-500">
+                    <CardHeader className="pb-2 pt-4"><CardTitle className="text-sm text-gray-500 font-medium">Total Revenue</CardTitle></CardHeader>
+                    <CardContent><div className="text-2xl font-bold text-green-700">{formatGHS(metrics?.totalRevenue || 0, 0)}</div></CardContent>
+                </Card>
+                <Card className="shadow-sm border-l-4 border-l-blue-500">
+                    <CardHeader className="pb-2 pt-4"><CardTitle className="text-sm text-gray-500 font-medium">Avg. Order Value</CardTitle></CardHeader>
+                    <CardContent><div className="text-2xl font-bold text-blue-700">{formatGHS(metrics?.avgOrderValue || 0)}</div></CardContent>
+                </Card>
+                <Card className="shadow-sm border-l-4 border-l-purple-500">
+                    <CardHeader className="pb-2 pt-4"><CardTitle className="text-sm text-gray-500 font-medium">Total Customers</CardTitle></CardHeader>
+                    <CardContent><div className="text-2xl font-bold text-purple-700">{metrics?.totalCustomers || 0}</div></CardContent>
+                </Card>
+            </div>
+
+            {/* 2. Charts Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card>
+                    <CardHeader><CardTitle className="text-lg">Revenue Trend</CardTitle></CardHeader>
+                    <CardContent className="h-80">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={salesData}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                                <XAxis dataKey="month" fontSize={12} />
+                                <YAxis fontSize={12} tickFormatter={(val) => `${(val/1000).toFixed(0)}k`} />
+                                <Tooltip content={<CustomTooltip />} />
+                                <Bar dataKey="revenue" fill="#10b981" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                        </ResponsiveContainer>
                     </CardContent>
                 </Card>
-                
-                <Card className="shadow-lg overflow-hidden">
-                    <CardHeader className="pb-2 px-4 pt-4">
-                      <CardTitle className="text-xs md:text-sm lg:text-base flex items-center gap-2">
-                        <TrendingUp className="w-4 h-4 text-primary flex-shrink-0" />
-                        <span className="truncate">Avg. Order Value</span>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="px-4 pb-4">
-                      <div className="text-xl md:text-2xl lg:text-3xl font-extrabold text-primary break-all leading-tight">
-                        {formatGHS(metrics?.avgOrderValue || 0)}
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Per completed order
-                      </p>
-                    </CardContent>
-                </Card>
-                
-                <Card className="shadow-lg overflow-hidden sm:col-span-2 lg:col-span-1">
-                    <CardHeader className="pb-2 px-4 pt-4">
-                      <CardTitle className="text-xs md:text-sm lg:text-base flex items-center gap-2">
-                        <Users className="w-4 h-4 text-blue-600 flex-shrink-0" />
-                        <span className="truncate">New Customers</span>
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="px-4 pb-4">
-                      <div className="text-xl md:text-2xl lg:text-3xl font-extrabold text-blue-600">
-                        {metrics?.newCustomers || 0}
-                      </div>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Total: {metrics?.totalCustomers || 0} customers
-                      </p>
+
+                <Card>
+                    <CardHeader><CardTitle className="text-lg">Sales by Category</CardTitle></CardHeader>
+                    <CardContent className="h-80">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={categoryData}
+                                    dataKey="value"
+                                    nameKey="name"
+                                    cx="50%" cy="50%"
+                                    outerRadius={80}
+                                    fill="#8884d8"
+                                    label={(entry) => entry.name}
+                                >
+                                    {categoryData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={entry.color} />
+                                    ))}
+                                </Pie>
+                                <Tooltip content={<CustomTooltip />} />
+                                <Legend />
+                            </PieChart>
+                        </ResponsiveContainer>
                     </CardContent>
                 </Card>
             </div>
 
-            {/* Monthly Revenue Chart */}
-            <Card className="shadow-lg overflow-hidden">
-                <CardHeader className="px-4 pt-4 pb-2">
-                    <CardTitle className="text-sm md:text-base lg:text-lg">Monthly Revenue & Orders</CardTitle>
-                </CardHeader>
-                <CardContent className="h-64 md:h-80 lg:h-96 px-2 md:px-4 pb-4">
-                    {salesData.length === 0 ? (
-                        <div className="flex items-center justify-center h-full text-gray-500 text-xs md:text-sm text-center px-4">
-                            No sales data available for the selected period
-                        </div>
-                    ) : (
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart 
-                              data={salesData} 
-                              margin={{ top: 10, right: isMobile ? 5 : 10, left: isMobile ? -20 : -10, bottom: 5 }}
-                            >
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                                <XAxis 
-                                  dataKey="month" 
-                                  tick={{ fontSize: isMobile ? 10 : 12 }}
-                                  angle={isMobile ? -45 : 0}
-                                  textAnchor={isMobile ? "end" : "middle"}
-                                  height={isMobile ? 60 : 30}
-                                />
-                                <YAxis 
-                                  yAxisId="left" 
-                                  orientation="left" 
-                                  stroke="#8884d8" 
-                                  tickFormatter={val => isMobile ? `${(val / 1000).toFixed(0)}k` : formatGHS(val, 0)}
-                                  tick={{ fontSize: isMobile ? 9 : 11 }}
-                                  width={isMobile ? 35 : 60}
-                                />
-                                <YAxis 
-                                  yAxisId="right" 
-                                  orientation="right" 
-                                  stroke="#82ca9d"
-                                  tick={{ fontSize: isMobile ? 9 : 11 }}
-                                  width={isMobile ? 30 : 40}
-                                />
-                                <Tooltip content={<CustomTooltip />} />
-                                <Legend 
-                                  wrapperStyle={{ fontSize: isMobile ? '10px' : '12px' }} 
-                                  iconSize={isMobile ? 8 : 14}
-                                />
-                                <Bar yAxisId="left" dataKey="revenue" name="Revenue (GHS)" fill="#DB2777" />
-                                <Bar yAxisId="right" dataKey="orders" name="Orders" fill="#5EEAD4" />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    )}
-                </CardContent>
-            </Card>
-
-            {/* Sales By Category Pie Chart */}
-            <Card className="shadow-lg overflow-hidden">
-                <CardHeader className="px-4 pt-4 pb-2">
-                  <CardTitle className="text-sm md:text-base lg:text-lg">Sales by Category</CardTitle>
-                </CardHeader>
-                <CardContent className="h-64 md:h-80 lg:h-96 px-2 md:px-4 pb-4">
-                    {categoryData.length === 0 ? (
-                        <div className="flex items-center justify-center h-full text-gray-500 text-xs md:text-sm text-center px-4">
-                            No category data available for the selected period
-                        </div>
-                    ) : (
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                            <Pie
-                                data={categoryData}
-                                dataKey="value"
-                                nameKey="name"
-                                cx="50%"
-                                cy="50%"
-                                outerRadius={isMobile ? "60%" : "70%"}
-                                fill="#8884d8"
-                                label={isMobile ? false : (entry: any) => renderCustomLabel(entry, false)}
-                                labelLine={!isMobile}
-                            >
-                                {categoryData.map((entry, index) => (
-                                    <Cell key={`cell-${index}`} fill={entry.color} />
+            {/* 3. Detailed Lists Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                
+                {/* Top Customers Table */}
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <CardTitle className="text-lg flex items-center gap-2">
+                            <Crown className="w-5 h-5 text-yellow-500" /> Top VIP Customers
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {topCustomers.length > 0 ? (
+                            <div className="space-y-4">
+                                {topCustomers.map((c, idx) => (
+                                    <div key={c.id} className="flex items-center justify-between border-b last:border-0 pb-3 last:pb-0">
+                                        <div className="flex items-center gap-3">
+                                            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-yellow-100 text-yellow-700 font-bold text-sm">
+                                                {idx + 1}
+                                            </div>
+                                            <div>
+                                                <p className="font-medium text-sm">{c.name}</p>
+                                                <p className="text-xs text-gray-500">{c.email}</p>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="font-bold text-green-700 text-sm">{formatGHS(c.totalSpent)}</p>
+                                            <p className="text-xs text-gray-500">{c.totalOrders} orders</p>
+                                        </div>
+                                    </div>
                                 ))}
-                            </Pie>
-                            <Tooltip content={<CustomTooltip />} />
-                            <Legend 
-                              wrapperStyle={{ fontSize: isMobile ? '10px' : '12px' }}
-                              iconSize={isMobile ? 8 : 14}
-                            />
-                        </PieChart>
-                        </ResponsiveContainer>
-                    )}
-                </CardContent>
-            </Card>
+                            </div>
+                        ) : (
+                            <div className="text-center py-8 text-gray-500">No customer data available.</div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Discount Performance Table */}
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between">
+                        <CardTitle className="text-lg flex items-center gap-2">
+                            <Tag className="w-5 h-5 text-blue-500" /> Coupon Performance
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {discounts.length > 0 ? (
+                            <div className="space-y-4">
+                                {discounts.map((d, idx) => (
+                                    <div key={d.code} className="flex items-center justify-between border-b last:border-0 pb-3 last:pb-0">
+                                        <div>
+                                            <div className="font-mono font-bold bg-gray-100 px-2 py-0.5 rounded text-sm inline-block mb-1">
+                                                {d.code}
+                                            </div>
+                                            <p className="text-xs text-gray-500">{d.usageCount} uses</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="font-bold text-sm">{formatGHS(d.totalRevenue)}</p>
+                                            <p className="text-xs text-gray-500">Revenue Generated</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-8 text-gray-500">No discount usage recorded.</div>
+                        )}
+                    </CardContent>
+                </Card>
+
+            </div>
         </div>
     );
 }

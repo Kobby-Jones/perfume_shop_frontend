@@ -4,7 +4,7 @@
 
 import { ReactNode, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Package, Users, Settings, LogOut, LayoutDashboard, ShoppingBag, BarChart, Menu, X, MessageSquare, Tag } from 'lucide-react';
+import { Package, Users, LayoutDashboard, ShoppingBag, BarChart, Menu, X, MessageSquare, Tag, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -13,16 +13,16 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAlert } from '@/components/shared/ModalAlert';
 import { Loader2 } from 'lucide-react';
 
+// Define roles allowed for each link
 const adminNavLinks = [
-  { href: '/admin', label: 'Dashboard Overview', icon: LayoutDashboard },
-  { href: '/admin/orders', label: 'Orders', icon: ShoppingBag },
-  { href: '/admin/products', label: 'Products', icon: Package },
-  { href: '/admin/users', label: 'Customers', icon: Users },
-  { href: '/admin/inventory', label: 'Inventory', icon: Package },
-  { href: '/admin/reports', label: 'Analytics', icon: BarChart },
-  { href: '/admin/reviews', label: 'Reviews', icon: MessageSquare },
-  { href: '/admin/discounts', label: 'Discounts', icon: Tag },
-  // { href: '/admin/settings', label: 'Settings', icon: Settings }, // Settings page is not a required feature yet
+  { href: '/admin', label: 'Overview', icon: LayoutDashboard, roles: ['admin', 'staff'] },
+  { href: '/admin/orders', label: 'Orders', icon: ShoppingBag, roles: ['admin', 'staff'] },
+  { href: '/admin/products', label: 'Products', icon: Package, roles: ['admin', 'staff'] },
+  { href: '/admin/users', label: 'Customers', icon: Users, roles: ['admin'] }, // Admin Only
+  { href: '/admin/inventory', label: 'Inventory', icon: Package, roles: ['admin', 'staff'] },
+  { href: '/admin/reports', label: 'Analytics', icon: BarChart, roles: ['admin'] }, // Admin Only
+  { href: '/admin/reviews', label: 'Reviews', icon: MessageSquare, roles: ['admin', 'staff'] },
+  { href: '/admin/discounts', label: 'Discounts', icon: Tag, roles: ['admin'] }, // Admin Only
 ];
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
@@ -32,25 +32,24 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const { alert } = useAlert();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
-  // SECURE CHECK: Rely only on the role returned by the verified token
-  const isAdminUser = user?.role === "admin";
+  // 1. Allow both Admin and Staff
+  const isAuthorized = user?.role === "admin" || user?.role === "staff";
 
   useEffect(() => {
-    // Wait until the initial auth check is complete
     if (!isAuthLoading) {
         if (!isLoggedIn) {
             router.push('/account/auth/login');
             return;
         }
         
-        if (isLoggedIn && !isAdminUser) {
-            alert({ title: "Access Denied", message: "Administrator privileges required.", variant: 'error' });
-            router.push('/account'); // Redirect non-admins to their dashboard
+        // 2. Update Security Check
+        if (isLoggedIn && !isAuthorized) {
+            alert({ title: "Access Denied", message: "Management privileges required.", variant: 'error' });
+            router.push('/account'); 
         }
     }
-  }, [isLoggedIn, isAdminUser, isAuthLoading, router, alert]);
+  }, [isLoggedIn, isAuthorized, isAuthLoading, router, alert]);
 
-  // Close sidebar when route changes (mobile)
   useEffect(() => {
     setIsSidebarOpen(false);
   }, [pathname]);
@@ -58,11 +57,10 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const handleLogout = () => {
     logout();
     router.push('/account/auth/login');
-    alert({ title: "Signed Out", message: "You have securely logged out of the Admin Dashboard.", variant: 'info' });
+    alert({ title: "Signed Out", message: "Logged out of Management Dashboard.", variant: 'info' });
   };
   
-  // Show loading indicator while authentication is pending
-  if (isAuthLoading || (isLoggedIn && !isAdminUser)) {
+  if (isAuthLoading || (isLoggedIn && !isAuthorized)) {
     return (
       <div className="flex justify-center items-center h-screen bg-gray-50">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
@@ -70,51 +68,49 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!isAdminUser) {
-      // If we land here, it means redirection failed or a quick flicker. 
-      // Null return lets Next.js handle the redirect while waiting.
-      return null;
-  }
+  if (!isAuthorized) return null;
+
+  // 3. Filter Links based on Role
+  const visibleLinks = adminNavLinks.filter(link => 
+    link.roles.includes(user?.role || '')
+  );
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-gray-50">
       {/* Mobile Header */}
       <div className="md:hidden bg-white border-b shadow-sm p-4 flex items-center justify-between sticky top-0 z-50">
         <h1 className="text-xl font-serif font-bold tracking-widest text-primary">
-          Scentia Admin
+          {user?.role === 'admin' ? 'Admin Panel' : 'Staff Panel'}
         </h1>
         <Button 
           variant="ghost" 
           size="icon"
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          aria-label="Toggle menu"
         >
           {isSidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </Button>
       </div>
 
-      {/* Sidebar Overlay (Mobile) */}
-      {isSidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
+      {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setIsSidebarOpen(false)} />}
 
-      {/* Sidebar */}
       <aside className={cn(
         "w-64 bg-white border-r shadow-lg flex flex-col p-4",
         "fixed md:static inset-y-0 left-0 z-50 transform transition-transform duration-300",
         isSidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
       )}>
         <h1 className="hidden md:block text-2xl font-serif font-bold tracking-widest text-primary mb-6">
-          Scentia Admin
+           {user?.role === 'admin' ? 'Admin Panel' : 'Staff Panel'}
         </h1>
         
+        <div className="mb-6 px-3 py-2 bg-muted/50 rounded-lg">
+            <p className="text-xs font-bold text-muted-foreground uppercase">Logged in as</p>
+            <p className="font-medium truncate">{user?.name}</p>
+            <p className="text-xs text-primary font-semibold capitalize">{user?.role}</p>
+        </div>
+
         <nav className="flex flex-col space-y-1 flex-grow overflow-y-auto">
-          {adminNavLinks.map((link) => {
-            // Updated active link logic for better path matching
-            const isActive = pathname === link.href || (link.href !== '/admin' && pathname.startsWith(link.href) && pathname.charAt(link.href.length) === '/');
+          {visibleLinks.map((link) => {
+            const isActive = pathname === link.href || (link.href !== '/admin' && pathname.startsWith(link.href));
             const Icon = link.icon;
             return (
               <Link
@@ -134,17 +130,11 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         
         <Separator className="my-4" />
 
-        <Button 
-          onClick={handleLogout} 
-          variant="outline" 
-          className="w-full text-red-500 hover:bg-red-50/50 min-h-[48px]"
-        >
-          <LogOut className="w-4 h-4 mr-2" />
-          Sign Out
+        <Button onClick={handleLogout} variant="outline" className="w-full text-red-500 hover:bg-red-50/50">
+          <LogOut className="w-4 h-4 mr-2" /> Sign Out
         </Button>
       </aside>
 
-      {/* Main Content Area */}
       <main className="flex-1 p-4 md:p-8 overflow-x-hidden">
         {children}
       </main>

@@ -14,7 +14,7 @@ export default function HomePage() {
       {/* 1. Primary Hero Banner */}
       <HeroBanner />
 
-      {/* 2. Featured Products Section */}
+       {/* 2. Featured Products Section */}
       {/* NOTE: Using Server Component for initial data fetch (FeaturedProductsSection) */}
       <FeaturedProductsSection />
       

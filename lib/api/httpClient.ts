@@ -133,15 +133,20 @@ export async function apiFetch(
 
     const data = await response.json().catch(() => ({ message: 'Server error' }));
 
-    if (!response.ok) {
+   if (!response.ok) {
       if (response.status === 401 || response.status === 403) {
-        removeToken();
+        // Only clear token if it was a 401 (Unauthorized), not 403 (Forbidden/CSRF)
+        // 403 might just mean "Bad CSRF token", not "Bad Session".
+        if (response.status === 401) {
+             removeToken();
+        }
 
-        // Redirect to login if on a protected page
+        // Redirect to login ONLY if we are NOT already on an auth page
         if (
           typeof window !== 'undefined' &&
           (window.location.pathname.startsWith('/account') ||
-            window.location.pathname.startsWith('/admin'))
+            window.location.pathname.startsWith('/admin')) &&
+          !window.location.pathname.startsWith('/account/auth') // <--- FIX: Don't redirect if on login/register
         ) {
           window.location.href = '/account/auth/login';
         }

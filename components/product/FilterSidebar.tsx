@@ -2,211 +2,135 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
-import { Filter, X, Loader2 } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
-
-import { apiFetch } from '@/lib/api/httpClient'; // Import API client
-
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Separator } from '@/components/ui/separator';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
-interface FilterOptionsResponse {
-    brands: string[];
-    maxPrice: number;
-}
+const CATEGORIES = ['Men', 'Women', 'Unisex', 'Niche', 'Sets'];
+const BRANDS = ['Chanel', 'Dior', 'Gucci', 'Tom Ford', 'Creed', 'Versace', 'YSL'];
 
-const priceRangeMin = 0; 
+export function FilterSidebar() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
-/**
- * Function to fetch dynamic filter options from the live API endpoint.
- */
-const fetchFilterOptions = async (): Promise<FilterOptionsResponse> => {
-    try {
-        const data = await apiFetch('/products/filters');
-        // Ensure maxPrice is at least 100 for a reasonable slider scale
-        data.maxPrice = Math.max(100, Math.ceil(data.maxPrice / 100) * 100); 
-        return data as FilterOptionsResponse;
-    } catch (error) {
-        console.error("Failed to fetch filter options:", error);
-        // Return a safe default structure on error
-        return { brands: [], maxPrice: 1000 };
-    }
-};
-
-
-/**
- * Renders the interactive filter controls for the Product Listing Page.
- * @param props.onFilterChange - Callback function when filter values change.
- */
-export function FilterSidebar({ onFilterChange }: { onFilterChange: (filters: any) => void }) {
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  // Initial state derived from URL
+  const [priceRange, setPriceRange] = useState([0, 5000]);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
-  
-  // Fetch dynamic filter options from the live backend
-  const { data: filterOptions, isLoading: isLoadingOptions } = useQuery<FilterOptionsResponse>({
-      queryKey: ['filterOptions'],
-      queryFn: fetchFilterOptions,
-      staleTime: Infinity, // These options don't change often
-  });
 
-  const maxPrice = filterOptions?.maxPrice || 1000;
-  // Use a sensible default range based on the fetched maxPrice
-  const initialPriceRange: number[] = useMemo(() => [priceRangeMin, maxPrice], [maxPrice]);
-  const [priceRange, setPriceRange] = useState<number[]>(initialPriceRange);
-  
-  // Reset price range when dynamic maxPrice is initially fetched
-  useMemo(() => {
-      setPriceRange(initialPriceRange);
-  }, [initialPriceRange]);
+  useEffect(() => {
+    const min = searchParams.get('minPrice') ? Number(searchParams.get('minPrice')) : 0;
+    const max = searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : 5000;
+    setPriceRange([min, max]);
 
+    const cat = searchParams.get('category');
+    setSelectedCategories(cat ? cat.split(',') : []);
 
-  /**
-   * Handles changes to the selected brand checkboxes.
-   */
-  const handleBrandChange = (brand: string, isChecked: boolean) => {
-    const newBrands = isChecked
-      ? [...selectedBrands, brand]
-      : selectedBrands.filter((b) => b !== brand);
+    const brand = searchParams.get('brand');
+    setSelectedBrands(brand ? brand.split(',') : []);
+  }, [searchParams]);
+
+  const applyFilters = () => {
+    const params = new URLSearchParams();
     
-    setSelectedBrands(newBrands);
-    // Join brands with comma for the API query string
-    onFilterChange({ brands: newBrands.join(',') });
+    if (selectedCategories.length > 0) params.set('category', selectedCategories.join(','));
+    if (selectedBrands.length > 0) params.set('brand', selectedBrands.join(','));
+    if (priceRange[0] > 0) params.set('minPrice', priceRange[0].toString());
+    if (priceRange[1] < 5000) params.set('maxPrice', priceRange[1].toString());
+    
+    // Preserve search query if it exists
+    const currentSearch = searchParams.get('search');
+    if (currentSearch) params.set('search', currentSearch);
+
+    router.push(`/shop?${params.toString()}`);
   };
 
-  /**
-   * Handles changes to the price range slider.
-   */
-  const handlePriceUpdate = (newRange: number[]) => {
-    setPriceRange(newRange);
-    onFilterChange({ price: newRange });
+  const toggleCategory = (cat: string) => {
+    setSelectedCategories(prev => 
+      prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
+    );
   };
 
-  /**
-   * Clears all active filters and resets state.
-   */
-  const handleClearFilters = () => {
-    setSelectedBrands([]);
-    setPriceRange(initialPriceRange);
-    onFilterChange({ 
-        brands: [], 
-        price: initialPriceRange 
-    });
-    setIsSheetOpen(false);
+  const toggleBrand = (brand: string) => {
+    setSelectedBrands(prev => 
+      prev.includes(brand) ? prev.filter(b => b !== brand) : [...prev, brand]
+    );
   };
-
-  // Determine if filters are active to enable the clear button
-  const areFiltersActive = useMemo(() => {
-      return (
-          selectedBrands.length > 0 ||
-          priceRange[0] !== priceRangeMin ||
-          priceRange[1] !== maxPrice
-      );
-  }, [selectedBrands, priceRange, maxPrice]);
-
-
-  // The actual filter content, reusable for both mobile Sheet and desktop sidebar
-  const filterContent = isLoadingOptions ? (
-      <div className="flex justify-center items-center h-32">
-          <Loader2 className="w-6 h-6 animate-spin text-primary" />
-          <p className="text-sm text-muted-foreground ml-2">Loading filters...</p>
-      </div>
-  ) : (
-    <div className="space-y-6 p-4">
-      
-      {/* Price Range Filter */}
-      <div className="space-y-4">
-        <h4 className="text-lg font-semibold text-foreground">Price Range</h4>
-        <Label className="block text-sm font-medium text-primary">
-            GHS {priceRange[0].toFixed(0)} - GHS {priceRange[1].toFixed(0)}
-        </Label>
-        <Slider
-          min={priceRangeMin}
-          max={maxPrice}
-          step={1}
-          value={priceRange}
-          onValueChange={handlePriceUpdate}
-          className="w-full pt-2"
-        />
-      </div>
-
-      <Separator className="bg-border" />
-
-      {/* Brand Filter (Checkboxes) */}
-      <div className="space-y-4">
-        <h4 className="text-lg font-semibold text-foreground">Brand</h4>
-        {(filterOptions?.brands || []).map((brand) => (
-          <div key={brand} className="flex items-center space-x-2">
-            <Checkbox
-              id={`brand-${brand}`}
-              checked={selectedBrands.includes(brand)}
-              onCheckedChange={(checked) => handleBrandChange(brand, !!checked)}
-            />
-            <Label htmlFor={`brand-${brand}`} className="text-sm font-normal cursor-pointer">
-              {brand}
-            </Label>
-          </div>
-        ))}
-      </div>
-
-      <Separator className="bg-border" />
-
-      {/* Category Filter (Placeholder - assuming this is handled via URL params) */}
-      <div className="space-y-4">
-        <h4 className="text-lg font-semibold text-foreground">Category (via URL)</h4>
-        {['Women', 'Men', 'Unisex'].map((category) => (
-          <div key={category} className="flex items-center space-x-2">
-            {/* Keeping as disabled/placeholder as the main route handles this filter */}
-            <Checkbox id={`cat-${category}`} disabled /> 
-            <Label htmlFor={`cat-${category}`} className="text-sm font-normal text-foreground/60">
-              {category}
-            </Label>
-          </div>
-        ))}
-      </div>
-
-      {/* Clear Button */}
-      <Button 
-        variant="outline" 
-        onClick={handleClearFilters}
-        className="w-full mt-6"
-        disabled={!areFiltersActive}
-      >
-        <X className="w-4 h-4 mr-2" />
-        Clear Filters
-      </Button>
-    </div>
-  );
 
   return (
-    <>
-      {/* Mobile Filter Sheet Trigger */}
-      <div className="lg:hidden">
-        <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-          <SheetTrigger asChild>
-            <Button variant="outline" className="flex items-center space-x-2">
-              <Filter className="w-4 h-4" />
-              <span>Filter & Sort</span>
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="left" className="w-[80%] sm:w-[350px] p-0">
-            <SheetHeader className="p-4 border-b">
-              <SheetTitle className="text-lg font-bold">Filter Products</SheetTitle>
-            </SheetHeader>
-            {/* The filter content itself */}
-            {filterContent}
-          </SheetContent>
-        </Sheet>
+    <div className="space-y-6">
+      <div>
+        <h3 className="font-semibold mb-4">Price Range (GHS)</h3>
+        <Slider
+          defaultValue={[0, 5000]}
+          value={priceRange}
+          max={5000}
+          step={50}
+          onValueChange={setPriceRange}
+          className="mb-4"
+        />
+        <div className="flex items-center justify-between text-sm">
+          <span>{priceRange[0]}</span>
+          <span>{priceRange[1]}+</span>
+        </div>
       </div>
 
-      {/* Desktop Filter Sidebar (Hidden on Mobile) */}
-      <aside className="hidden lg:block lg:w-64 lg:flex-shrink-0 border-r border-border">
-        {filterContent}
-      </aside>
-    </>
+      <Separator />
+
+      <Accordion type="multiple" defaultValue={['categories', 'brands']} className="w-full">
+        <AccordionItem value="categories">
+          <AccordionTrigger>Categories</AccordionTrigger>
+          <AccordionContent>
+            <div className="space-y-2">
+              {CATEGORIES.map((cat) => (
+                <div key={cat} className="flex items-center space-x-2">
+                  <Checkbox 
+                    id={`cat-${cat}`} 
+                    checked={selectedCategories.includes(cat)}
+                    onCheckedChange={() => toggleCategory(cat)}
+                  />
+                  <Label htmlFor={`cat-${cat}`}>{cat}</Label>
+                </div>
+              ))}
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        <AccordionItem value="brands">
+          <AccordionTrigger>Brands</AccordionTrigger>
+          <AccordionContent>
+            <div className="space-y-2">
+              {BRANDS.map((brand) => (
+                <div key={brand} className="flex items-center space-x-2">
+                  <Checkbox 
+                    id={`brand-${brand}`}
+                    checked={selectedBrands.includes(brand)}
+                    onCheckedChange={() => toggleBrand(brand)}
+                  />
+                  <Label htmlFor={`brand-${brand}`}>{brand}</Label>
+                </div>
+              ))}
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+
+      <Button onClick={applyFilters} className="w-full">Apply Filters</Button>
+      
+      {(selectedCategories.length > 0 || selectedBrands.length > 0 || priceRange[0] > 0) && (
+        <Button 
+          variant="outline" 
+          className="w-full mt-2"
+          onClick={() => router.push('/shop')}
+        >
+          Clear All
+        </Button>
+      )}
+    </div>
   );
 }

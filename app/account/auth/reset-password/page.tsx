@@ -2,14 +2,14 @@
 
 'use client';
 
-import { Suspense } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useMutation } from '@tanstack/react-query';
-import { Loader2, Key } from 'lucide-react';
+import { Loader2, Key, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect } from 'react';
 
 import { AuthLayout } from '@/components/auth/AuthLayout';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -17,51 +17,60 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { apiFetch } from '@/lib/api/httpClient';
 
-// Schema for password reset validation
 const resetPasswordSchema = z.object({
-    password: z.string().min(8, { message: 'New password must be at least 8 characters.' }),
+    phoneNumber: z.string().min(10, "Phone number is required"),
+    otp: z.string().length(6, "OTP must be 6 digits"),
+    newPassword: z.string().min(6, "Password must be at least 6 characters"),
     confirmPassword: z.string(),
-}).refine((data) => data.password === data.confirmPassword, {
-    message: 'Passwords do not match.',
-    path: ['confirmPassword'],
+}).refine((data) => data.newPassword === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
 });
 
 type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>;
 
-/**
- * Reset Password Form Component (wrapped in Suspense)
- */
-function ResetPasswordForm() {
+export default function ResetPasswordPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const token = searchParams.get('token');
+    const phoneParam = searchParams.get('phone') || '';
 
     const form = useForm<ResetPasswordFormData>({
         resolver: zodResolver(resetPasswordSchema),
-        defaultValues: { password: '', confirmPassword: '' },
+        defaultValues: { 
+            phoneNumber: phoneParam, 
+            otp: '', 
+            newPassword: '', 
+            confirmPassword: '' 
+        },
     });
+
+    // Pre-fill phone number if passed from previous page
+    useEffect(() => {
+        if (phoneParam) {
+            form.setValue('phoneNumber', phoneParam);
+        }
+    }, [phoneParam, form]);
 
     const mutation = useMutation({
         mutationFn: (data: ResetPasswordFormData) => {
-            if (!token) throw new Error('Missing reset token.');
-            
             return apiFetch('/auth/reset-password', {
                 method: 'POST',
                 body: JSON.stringify({
-                    token,
-                    newPassword: data.password,
+                    phoneNumber: data.phoneNumber,
+                    otp: data.otp,
+                    newPassword: data.newPassword,
                 }),
             });
         },
         onSuccess: (data) => {
-            toast.success('Password Successfully Reset', {
-                description: data.message || 'You can now sign in with your new password.',
+            toast.success('Password Reset Successful', {
+                description: 'You can now login with your new password.',
             });
             router.push('/account/auth/login');
         },
         onError: (error: any) => {
-            toast.error('Password Reset Failed', {
-                description: error.message || 'The token may be invalid or expired. Please try requesting a new link.',
+            toast.error('Reset Failed', {
+                description: error.message || 'Invalid code or expired session.',
             });
         },
     });
@@ -69,40 +78,59 @@ function ResetPasswordForm() {
     const onSubmit = (data: ResetPasswordFormData) => {
         mutation.mutate(data);
     };
-    
-    if (!token) {
-        return (
-            <AuthLayout title="Invalid Request">
-                <p className="text-center text-red-500">
-                    Missing password reset token. Please check your email link or request a new reset.
-                </p>
-                <Button variant="link" onClick={() => router.push('/account/auth/forgot-password')} className="w-full mt-4">
-                    Request New Reset Link
-                </Button>
-            </AuthLayout>
-        );
-    }
 
     return (
         <AuthLayout title="Set New Password">
             <p className="text-sm text-center text-foreground/70 mb-4">
-                Enter and confirm your new password below.
+                Enter the OTP sent to your phone and your new password.
             </p>
             <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                    {/* Phone Number (Hidden or Read-only usually, but editable in case of error) */}
                     <FormField
                         control={form.control}
-                        name="password"
+                        name="phoneNumber"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Phone Number</FormLabel>
+                                <FormControl>
+                                    <Input placeholder="024XXXXXXX" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+
+                    <FormField
+                        control={form.control}
+                        name="otp"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Verification Code (OTP)</FormLabel>
+                                <FormControl>
+                                    <Input 
+                                        placeholder="123456" 
+                                        className="tracking-widest text-lg" 
+                                        maxLength={6} 
+                                        {...field} 
+                                    />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+
+                    <FormField
+                        control={form.control}
+                        name="newPassword"
                         render={({ field }) => (
                             <FormItem>
                                 <FormLabel>New Password</FormLabel>
                                 <FormControl>
-                                    <Input 
-                                        placeholder="••••••••" 
-                                        type="password" 
-                                        {...field} 
-                                        disabled={mutation.isPending}
-                                    />
+                                    <div className="relative">
+                                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                        <Input type="password" placeholder="••••••••" {...field} className="pl-10"/>
+                                    </div>
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>
@@ -116,12 +144,10 @@ function ResetPasswordForm() {
                             <FormItem>
                                 <FormLabel>Confirm New Password</FormLabel>
                                 <FormControl>
-                                    <Input 
-                                        placeholder="••••••••" 
-                                        type="password" 
-                                        {...field} 
-                                        disabled={mutation.isPending}
-                                    />
+                                    <div className="relative">
+                                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                        <Input type="password" placeholder="••••••••" {...field} className="pl-10"/>
+                                    </div>
                                 </FormControl>
                                 <FormMessage />
                             </FormItem>
@@ -148,22 +174,5 @@ function ResetPasswordForm() {
                 </form>
             </Form>
         </AuthLayout>
-    );
-}
-
-/**
- * Reset Password Page with Suspense boundary
- */
-export default function ResetPasswordPage() {
-    return (
-        <Suspense fallback={
-            <AuthLayout title="Loading...">
-                <div className="flex justify-center items-center py-8">
-                    <Loader2 className="h-8 w-8 animate-spin" />
-                </div>
-            </AuthLayout>
-        }>
-            <ResetPasswordForm />
-        </Suspense>
     );
 }

@@ -2,6 +2,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { Menu, Search, User, ShoppingCart, LogOut, Heart, Package, ChevronDown, Sparkles, LayoutDashboard } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -79,8 +80,17 @@ export function Header() {
               <SheetContent side="left" className="w-[300px] sm:w-[350px] overflow-y-auto">
                 <div className="flex flex-col space-y-6 pt-6">
                   {/* Mobile Logo */}
-                  <div className="flex items-center">
-                    <h2 className="text-2xl font-serif font-bold tracking-widest text-primary">
+                  <div className="flex flex-col items-center">
+                    <div className="relative h-16 w-16 mb-2">
+                      <Image 
+                        src="/logo.jpg" 
+                        alt="Scentia Logo" 
+                        fill
+                        className="object-contain"
+                        priority
+                      />
+                    </div>
+                    <h2 className="text-xl font-serif font-bold tracking-widest text-primary">
                       Scentia
                     </h2>
                   </div>
@@ -159,9 +169,20 @@ export function Header() {
 
             {/* Logo */}
             <Link href="/" className="flex-shrink-0">
-              <h1 className="text-2xl md:text-3xl font-serif font-bold tracking-widest text-primary hover:text-primary/80 transition-colors">
-                Scentia
-              </h1>
+              <div className="flex flex-col items-center">
+                <div className="relative h-8 w-8 md:h-10 md:w-10">
+                  <Image 
+                    src="/logo.jpg" 
+                    alt="Scent Haven Logo" 
+                    fill
+                    className="object-contain"
+                    priority
+                  />
+                </div>
+                <h1 className="text-xs md:text-sm font-serif font-bold tracking-widest text-primary hover:text-primary/80 transition-colors mt-0.5">
+                  Scent Haven
+                </h1>
+              </div>
             </Link>
           </div>
 
