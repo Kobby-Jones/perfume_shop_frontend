@@ -9,7 +9,7 @@ import { useMutation } from '@tanstack/react-query';
 import { Loader2, Key, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, Suspense } from 'react'; // ✅ Add Suspense here
 
 import { AuthLayout } from '@/components/auth/AuthLayout';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -29,9 +29,10 @@ const resetPasswordSchema = z.object({
 
 type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>;
 
-export default function ResetPasswordPage() {
+// ✅ STEP 1: Rename your component to something like "Content" or "Inner"
+function ResetPasswordContent() {
     const router = useRouter();
-    const searchParams = useSearchParams();
+    const searchParams = useSearchParams(); // ✅ This is what needs Suspense
     const phoneParam = searchParams.get('phone') || '';
 
     const form = useForm<ResetPasswordFormData>({
@@ -44,7 +45,6 @@ export default function ResetPasswordPage() {
         },
     });
 
-    // Pre-fill phone number if passed from previous page
     useEffect(() => {
         if (phoneParam) {
             form.setValue('phoneNumber', phoneParam);
@@ -86,7 +86,6 @@ export default function ResetPasswordPage() {
             </p>
             <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                    {/* Phone Number (Hidden or Read-only usually, but editable in case of error) */}
                     <FormField
                         control={form.control}
                         name="phoneNumber"
@@ -174,5 +173,20 @@ export default function ResetPasswordPage() {
                 </form>
             </Form>
         </AuthLayout>
+    );
+}
+
+//  STEP 2: Create new default export that wraps the content with Suspense
+export default function ResetPasswordPage() {
+    return (
+        <Suspense fallback={
+            <AuthLayout title="Set New Password">
+                <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                </div>
+            </AuthLayout>
+        }>
+            <ResetPasswordContent />
+        </Suspense>
     );
 }
