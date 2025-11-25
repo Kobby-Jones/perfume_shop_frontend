@@ -2,14 +2,14 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { apiFetch } from '@/lib/api/httpClient';
 
-export default function VerifyPaymentPage() {
+function VerifyPaymentContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [status, setStatus] = useState<'verifying' | 'success' | 'error'>('verifying');
@@ -38,9 +38,8 @@ export default function VerifyPaymentPage() {
 
                 setOrderId(response.order.id);
                 setStatus('success');
-                localStorage.removeItem('currentOrderId'); // Clean up
+                localStorage.removeItem('currentOrderId');
 
-                // Redirect to order details after 3 seconds
                 setTimeout(() => {
                     router.push(`/account/orders/${response.order.id}`);
                 }, 3000);
@@ -115,5 +114,20 @@ export default function VerifyPaymentPage() {
                 </div>
             </div>
         </div>
+    );
+}
+
+export default function VerifyPaymentPage() {
+    return (
+        <Suspense fallback={
+            <div className="container min-h-screen flex items-center justify-center">
+                <div className="text-center space-y-4">
+                    <Loader2 className="h-16 w-16 animate-spin text-primary mx-auto" />
+                    <h1 className="text-2xl font-bold">Loading...</h1>
+                </div>
+            </div>
+        }>
+            <VerifyPaymentContent />
+        </Suspense>
     );
 }
