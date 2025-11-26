@@ -4,6 +4,7 @@ import { HeroBanner } from '@/components/home/HeroBanner';
 import { FeaturedProductsSection } from '@/components/home/FeaturedProductsSection';
 import { PromotionalBanner } from '@/components/home/PromotionalBanner';
 import { TopCategoriesSection } from '@/components/home/TopCategoriesSection';
+
 /**
  * Main Home Page component.
  * This page serves as the entry point and marketing hub for the e-commerce site.
@@ -31,12 +32,12 @@ export default function HomePage() {
       {/* NOTE: This component is designed to guide users to key sections */}
       <TopCategoriesSection />
 
-      {/* 5. Promotional Banner 2 (e.g., Sale) */}
+      {/* 5. Promotional Banner 2 (e.g., Christmas Sale) */}
       <PromotionalBanner 
-        title="Summer Sale Event"
-        subtitle="Up to 40% off selected seasonal fragrances. Limited time only."
+        title="Christmas Fragrance Sale"
+        subtitle="Up to 40% off selected festive fragrances. Perfect gifts for the season!"
         bgColor="bg-secondary text-secondary-foreground"
-        ctaText="Shop Sale"
+        ctaText="Shop Christmas Sale"
         ctaLink="/shop?tag=sale"
       />
     </div>

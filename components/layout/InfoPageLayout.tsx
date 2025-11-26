@@ -2,6 +2,7 @@
 
 import { ReactNode } from 'react';
 import { Separator } from '@/components/ui/separator';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
 
 /**
  * Props for the InfoPageLayout component.
@@ -20,6 +21,11 @@ interface InfoPageLayoutProps {
 export function InfoPageLayout({ title, children }: InfoPageLayoutProps) {
   return (
     <div className="container py-8 md:py-12 max-w-4xl mx-auto">
+      <Breadcrumb 
+        items={[
+          { label: title }
+        ]} 
+      />
       <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-6">
         {title}
       </h1>

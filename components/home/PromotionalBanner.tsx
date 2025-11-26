@@ -26,8 +26,11 @@ export function PromotionalBanner({ title, subtitle, ctaText, ctaLink, bgColor }
         <h3 className="text-xl md:text-2xl font-semibold mb-2">{title}</h3>
         <p className="mb-4 text-sm md:text-base opacity-90">{subtitle}</p>
         <Link href={ctaLink}>
-            {/* Note: Button variant is hardcoded to outline for contrast, adjust color in parent component if needed */}
-            <Button variant="outline" className="border-current hover:bg-current/10">
+            {/* Fixed: Better hover state that maintains text visibility */}
+            <Button 
+              variant="outline" 
+              className="border-current hover:bg-white/20 hover:backdrop-blur-sm transition-all duration-200"
+            >
                 {ctaText}
             </Button>
         </Link>

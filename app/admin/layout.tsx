@@ -76,7 +76,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   );
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-gray-50">
+    <div className="h-screen flex flex-col md:flex-row bg-gray-50 overflow-hidden">
       {/* Mobile Header */}
       <div className="md:hidden bg-white border-b shadow-sm p-4 flex items-center justify-between sticky top-0 z-50">
         <h1 className="text-xl font-serif font-bold tracking-widest text-primary">
@@ -94,21 +94,23 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setIsSidebarOpen(false)} />}
 
       <aside className={cn(
-        "w-64 bg-white border-r shadow-lg flex flex-col p-4",
-        "fixed md:static inset-y-0 left-0 z-50 transform transition-transform duration-300",
+        "w-64 bg-white border-r shadow-lg flex flex-col",
+        "fixed md:sticky inset-y-0 md:top-0 left-0 z-50 md:h-screen transform transition-transform duration-300",
         isSidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
       )}>
-        <h1 className="hidden md:block text-2xl font-serif font-bold tracking-widest text-primary mb-6">
-           {user?.role === 'admin' ? 'Admin Panel' : 'Staff Panel'}
-        </h1>
-        
-        <div className="mb-6 px-3 py-2 bg-muted/50 rounded-lg">
-            <p className="text-xs font-bold text-muted-foreground uppercase">Logged in as</p>
-            <p className="font-medium truncate">{user?.name}</p>
-            <p className="text-xs text-primary font-semibold capitalize">{user?.role}</p>
+        <div className="flex-shrink-0 p-4">
+          <h1 className="hidden md:block text-2xl font-serif font-bold tracking-widest text-primary mb-6">
+             {user?.role === 'admin' ? 'Admin Panel' : 'Staff Panel'}
+          </h1>
+          
+          <div className="mb-6 px-3 py-2 bg-muted/50 rounded-lg">
+              <p className="text-xs font-bold text-muted-foreground uppercase">Logged in as</p>
+              <p className="font-medium truncate">{user?.name}</p>
+              <p className="text-xs text-primary font-semibold capitalize">{user?.role}</p>
+          </div>
         </div>
 
-        <nav className="flex flex-col space-y-1 flex-grow overflow-y-auto">
+        <nav className="flex flex-col space-y-1 flex-grow overflow-y-auto px-4 scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent">
           {visibleLinks.map((link) => {
             const isActive = pathname === link.href || (link.href !== '/admin' && pathname.startsWith(link.href));
             const Icon = link.icon;
@@ -118,7 +120,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                 href={link.href}
                 className={cn(
                   "flex items-center p-3 rounded-lg transition-colors duration-200 min-h-[48px]",
-                  isActive ? "bg-primary text-white font-semibold shadow-md" : "hover:bg-secondary text-foreground/80"
+                  isActive 
+                    ? "bg-primary text-primary-foreground font-semibold shadow-md" 
+                    : "text-foreground hover:bg-muted hover:text-primary"
                 )}
               >
                 <Icon className="w-5 h-5 mr-3 flex-shrink-0" />
@@ -128,14 +132,15 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           })}
         </nav>
         
-        <Separator className="my-4" />
-
-        <Button onClick={handleLogout} variant="outline" className="w-full text-red-500 hover:bg-red-50/50">
-          <LogOut className="w-4 h-4 mr-2" /> Sign Out
-        </Button>
+        <div className="flex-shrink-0 p-4">
+          <Separator className="mb-4" />
+          <Button onClick={handleLogout} variant="outline" className="w-full text-red-500 hover:bg-red-50 hover:text-red-600 border-red-200">
+            <LogOut className="w-4 h-4 mr-2" /> Sign Out
+          </Button>
+        </div>
       </aside>
 
-      <main className="flex-1 p-4 md:p-8 overflow-x-hidden">
+      <main className="flex-1 p-4 md:p-8 overflow-y-auto">
         {children}
       </main>
     </div>

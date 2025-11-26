@@ -4,7 +4,7 @@ import { ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { User, ShoppingBag, MapPin, Heart, Settings } from 'lucide-react';
-
+import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
 
@@ -17,25 +17,46 @@ const accountNavLinks = [
   { href: '/account/settings', label: 'Account Settings', icon: Settings },
 ];
 
-/**
- * A reusable layout wrapper for all user account pages.
- * Features a responsive sidebar navigation for desktop and a clean content area.
- * @param children - The content of the specific account page (e.g., Order History).
- */
-export function AccountLayout({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
+    /**
+     * A reusable layout wrapper for all user account pages.
+     * Features a responsive sidebar navigation for desktop and a clean content area.
+     * @param children - The content of the specific account page (e.g., Order History).
+     */
+    export function AccountLayout({ children }: { children: ReactNode }) {
+      const pathname = usePathname();
 
-  return (
-    <div className="container py-8 md:py-12">
-      <h1 className="text-3xl md:text-4xl font-bold mb-8">My Account</h1>
-      
-      <div className="flex flex-col lg:flex-row gap-8">
-        
-        {/* Left Column: Navigation Sidebar */}
-        <aside className="w-full lg:w-64 lg:flex-shrink-0">
-            <nav className="flex lg:flex-col space-x-4 lg:space-x-0 lg:space-y-2 p-4 border rounded-lg overflow-x-auto">
-                {accountNavLinks.map((link) => {
-                    const isActive = pathname === link.href || (pathname.startsWith(link.href) && link.href !== '/account' && (link.href === '/account/addresses' || pathname.startsWith(link.href)));
+      // Get page title from pathname
+    const getPageTitle = () => {
+      if (pathname === '/account') return 'Dashboard';
+      if (pathname === '/account/orders') return 'Order History';
+      if (pathname.startsWith('/account/orders/')) return 'Order Details';
+      if (pathname === '/account/addresses') return 'Address Book';
+      if (pathname === '/account/wishlist') return 'Wishlist';
+      if (pathname === '/account/settings') return 'Account Settings';
+      return 'Account';
+    };
+
+    const breadcrumbItems = [
+      { label: 'Account', href: '/account' },
+    ];
+
+    // Add current page to breadcrumb if not on main account page
+    if (pathname !== '/account') {
+      breadcrumbItems.push({ label: getPageTitle(), href: pathname ?? '/account' });
+    }
+
+    return (
+      <div className="container py-8 md:py-12">
+        <Breadcrumb items={breadcrumbItems} />
+        <h1 className="text-3xl md:text-4xl font-bold mb-8">My Account</h1>
+          
+          <div className="flex flex-col lg:flex-row gap-8">
+            
+            {/* Left Column: Navigation Sidebar */}
+            <aside className="w-full lg:w-64 lg:flex-shrink-0">
+                <nav className="flex lg:flex-col space-x-4 lg:space-x-0 lg:space-y-2 p-4 border rounded-lg overflow-x-auto">
+                    {accountNavLinks.map((link) => {
+                        const isActive = pathname === link.href || (pathname.startsWith(link.href) && link.href !== '/account' && (link.href === '/account/addresses' || pathname.startsWith(link.href)));
                     const Icon = link.icon;
                     return (
                         <Link

@@ -11,6 +11,7 @@ import { AuthGuard } from '@/components/layout/AuthGuard';
 import { AddressStep } from '@/components/checkout/AddressStep';
 import { PaymentStep } from '@/components/checkout/PaymentStep';
 import { CheckoutSummaryCard } from '@/components/checkout/CheckoutSummaryCard';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
 
 // Define the steps
 const STEPS = ['Address', 'Payment'];
@@ -122,6 +123,13 @@ export default function CheckoutPage() {
 
     return (
         <AuthGuard>
+            <Breadcrumb 
+                items={[
+                    { label: 'Shop', href: '/shop' },
+                    { label: 'Cart', href: '/cart' },
+                    { label: 'Checkout' }
+                ]} 
+                />
             <div className="container py-8 md:py-12">
                 <h1 className="text-3xl font-bold mb-8">Checkout</h1>
                 

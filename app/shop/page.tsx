@@ -7,22 +7,25 @@ import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Filter } from 'lucide-react';
 import { Product } from '@/lib/types';
+import { ProductGridSkeleton } from '@/components/product/ProductCardSkeleton';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Breadcrumb } from '@/components/ui/breadcrumb';
 
 export const metadata: Metadata = {
   title: 'Shop All Fragrances | Scentia',
-  description: 'Explore our extensive collection of luxury perfumes for men and women.',
+  description:
+    'Explore our extensive collection of luxury perfumes for men and women.',
 };
 
-// Type for SearchParams
 interface ShopPageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
-// Server Fetch Function
 async function getProducts(searchParams: any) {
-  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://scentia-api.onrender.com/api';
-  
-  // Construct Query String
+  const baseUrl =
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    'https://scentia-api.onrender.com/api';
+
   const params = new URLSearchParams();
   if (searchParams.category) params.append('category', searchParams.category);
   if (searchParams.brand) params.append('brand', searchParams.brand);
@@ -30,17 +33,16 @@ async function getProducts(searchParams: any) {
   if (searchParams.maxPrice) params.append('maxPrice', searchParams.maxPrice);
   if (searchParams.search) params.append('search', searchParams.search);
   if (searchParams.sort) params.append('sort', searchParams.sort);
-  
-  // Pagination defaults
+
   const page = searchParams.page || '1';
   params.append('page', page);
   params.append('limit', '12');
 
   try {
-    const res = await fetch(`${baseUrl}/products?${params.toString()}`, { 
-      cache: 'no-store' // Dynamic fetching
+    const res = await fetch(`${baseUrl}/products?${params.toString()}`, {
+      cache: 'no-store',
     });
-    
+
     if (!res.ok) throw new Error('Failed to fetch products');
     return res.json();
   } catch (error) {
@@ -50,30 +52,60 @@ async function getProducts(searchParams: any) {
 }
 
 export default async function ShopPage({ searchParams }: ShopPageProps) {
-  // Await searchParams before accessing properties
   const resolvedSearchParams = await searchParams;
-  
-  // 1. Fetch Data on Server
-  const { products, totalCount } = await getProducts(resolvedSearchParams);
+
+  const data = await getProducts(resolvedSearchParams);
+
+  const isLoading = !data;
+
+  if (isLoading) {
+    return (
+      <div className="container py-8">
+        <Breadcrumb 
+          items={[
+            { label: 'Shop' }
+          ]} 
+        />
+
+        <div className="flex flex-col lg:flex-row gap-8 mt-6">
+          <aside className="w-full lg:w-64">
+            <Skeleton className="h-96 w-full rounded-lg" />
+          </aside>
+
+          <div className="flex-1">
+            <ProductGridSkeleton count={8} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const { products, totalCount } = data;
   const hasProducts = products && products.length > 0;
 
   return (
     <div className="container py-8">
-      <div className="flex items-baseline justify-between border-b pb-6 mb-8">
+      <Breadcrumb 
+        items={[
+          { label: 'Shop' }
+        ]} 
+      />
+
+      <div className="flex items-baseline justify-between border-b pb-6 mb-8 mt-6">
         <h1 className="text-3xl font-bold tracking-tight">
-          {resolvedSearchParams.search ? `Search: "${resolvedSearchParams.search}"` : 'All Fragrances'}
+          {resolvedSearchParams.search
+            ? `Search: "${resolvedSearchParams.search}"`
+            : 'All Fragrances'}
         </h1>
         <span className="text-muted-foreground">{totalCount} products found</span>
       </div>
 
       <div className="flex gap-8">
-        {/* Desktop Sidebar */}
         <div className="hidden lg:block w-64 flex-shrink-0">
           <FilterSidebar />
         </div>
 
         <div className="flex-1">
-          {/* Mobile Filter Trigger */}
           <div className="lg:hidden mb-6">
             <Sheet>
               <SheetTrigger asChild>
@@ -89,7 +121,6 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
             </Sheet>
           </div>
 
-          {/* Product Grid */}
           {hasProducts ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-6">
               {products.map((product: Product) => (
@@ -104,9 +135,6 @@ export default async function ShopPage({ searchParams }: ShopPageProps) {
               </p>
             </div>
           )}
-          
-          {/* Simple Pagination (Optional - Add more robust logic if needed) */}
-          {/* This is a placeholder. Robust pagination requires client-side logic or simple Link components */}
         </div>
       </div>
     </div>

@@ -37,9 +37,9 @@ export function ProductCard({ product, onQuickView }: ProductCardProps) {
     ? Math.round(((product.originalPrice! - product.price) / product.originalPrice!) * 100)
     : 0;
 
-  // Mock rating data (you can extend your Product type to include these)
-  const rating = 4.5; // This should come from product.rating
-  const reviewCount = 127; // This should come from product.reviewCount
+// Use product data with fallbacks
+  const rating = product.rating ?? 0;
+  const reviewCount = product.reviewCount ?? 0;
 
   const formattedPrice = new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -72,10 +72,18 @@ export function ProductCard({ product, onQuickView }: ProductCardProps) {
     toggleWishlist(product.id);
   };
 
-  // Determine badges to show (you can extend Product type with these properties)
-  const showNewBadge = true; // product.isNew
-  const showBestsellerBadge = false; // product.isBestseller
-  const showFeaturedBadge = false; // product.isFeatured
+  // Calculate badges dynamically
+  // "New" = created within last 30 days
+  const isNew = product.createdAt 
+    ? (Date.now() - new Date(product.createdAt).getTime()) < 30 * 24 * 60 * 60 * 1000
+    : false;
+  
+  // "Bestseller" = high reviews + high rating
+  const isBestseller = (product.reviewCount ?? 0) >= 20 && (product.rating ?? 0) >= 4.0;
+  
+  const showNewBadge = isNew && !hasDiscount; // Don't show "New" if there's a discount badge
+  const showBestsellerBadge = isBestseller;
+  const showFeaturedBadge = product.isFeatured;
 
   return (
     <Card className="group relative overflow-hidden border border-gray-200 hover:border-gray-300 shadow-sm hover:shadow-lg transition-all duration-300 bg-white rounded-lg">
@@ -187,27 +195,33 @@ export function ProductCard({ product, onQuickView }: ProductCardProps) {
 
           {/* Rating */}
           <div className="flex items-center gap-1.5 mb-3">
-            <div className="flex items-center">
-              {[...Array(5)].map((_, i) => (
-                <Star
-                  key={i}
-                  className={cn(
-                    "w-3.5 h-3.5",
-                    i < Math.floor(rating)
-                      ? "fill-amber-400 text-amber-400"
-                      : i < rating
-                      ? "fill-amber-200 text-amber-400"
-                      : "fill-gray-200 text-gray-300"
-                  )}
-                />
-              ))}
-            </div>
-            <span className="text-xs text-gray-600 font-medium">
-              {rating}
-            </span>
-            <span className="text-xs text-gray-400">
-              ({reviewCount})
-            </span>
+            {reviewCount > 0 ? (
+              <>
+                <div className="flex items-center">
+                  {[...Array(5)].map((_, i) => (
+                    <Star
+                      key={i}
+                      className={cn(
+                        "w-3.5 h-3.5",
+                        i < Math.floor(rating)
+                          ? "fill-amber-400 text-amber-400"
+                          : i < rating
+                          ? "fill-amber-200 text-amber-400"
+                          : "fill-gray-200 text-gray-300"
+                      )}
+                    />
+                  ))}
+                </div>
+                <span className="text-xs text-gray-600 font-medium">
+                  {rating.toFixed(1)}
+                </span>
+                <span className="text-xs text-gray-400">
+                  ({reviewCount})
+                </span>
+              </>
+            ) : (
+              <span className="text-xs text-gray-400">No reviews yet</span>
+            )}
           </div>
 
           {/* Price Section - FIXED: Responsive layout that prevents overflow */}
@@ -244,13 +258,6 @@ export function ProductCard({ product, onQuickView }: ProductCardProps) {
             <ShoppingCart className="mr-2 h-4 w-4" />
             {isOutOfStock ? 'Notify Me' : 'Add to Cart'}
           </Button>
-
-          {/* Free Shipping or Delivery Info */}
-          {!isOutOfStock && (
-            <p className="text-xs text-green-600 text-center mt-2 font-medium">
-              ✓ Free shipping on orders over GHS 100
-            </p>
-          )}
         </CardContent>
       </Link>
     </Card>

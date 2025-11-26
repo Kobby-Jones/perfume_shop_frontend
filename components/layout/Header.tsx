@@ -1,8 +1,6 @@
-// components/layout/Header.tsx
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { Menu, Search, User, ShoppingCart, LogOut, Heart, Package, ChevronDown, Sparkles, LayoutDashboard } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -14,7 +12,6 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'; 
 import { SearchCommand } from './SearchCommand';
 
-// Define types for navigation links
 interface NavLink {
   name: string;
   href: string;
@@ -46,18 +43,17 @@ const navLinks: NavLink[] = [
 ];
 
 export function Header() {
-    const { totalItems } = useCart();
-    const { isLoggedIn, user, logout } = useAuth();
-    const router = useRouter();
+  const { totalItems } = useCart();
+  const { isLoggedIn, user, logout } = useAuth();
+  const router = useRouter();
 
-    const handleLogout = () => {
-        logout();
-        router.push('/account/auth/login');
-    };
+  const handleLogout = () => {
+    logout();
+    router.push('/account/auth/login');
+  };
 
   return (
     <header className="sticky top-0 z-50 w-full bg-white shadow-sm">
-      {/* Top Bar - Announcements/Promos */}
       <div className="bg-gradient-to-r from-primary/90 to-primary text-white">
         <div className="container flex h-9 items-center justify-center px-4 text-xs sm:text-sm">
           <Sparkles className="w-3 h-3 mr-2 hidden sm:inline" />
@@ -65,39 +61,32 @@ export function Header() {
         </div>
       </div>
 
-      {/* Main Header */}
       <div className="border-b border-gray-200">
         <div className="container flex h-16 md:h-20 items-center justify-between px-4 sm:px-6 lg:px-8">
-          {/* Mobile Menu + Logo */}
+
+          {/* Left: Mobile menu and logo */}
           <div className="flex items-center gap-3 lg:gap-6">
-            {/* Mobile Menu Trigger */}
+
             <Sheet>
               <SheetTrigger asChild className="lg:hidden">
                 <Button variant="ghost" size="icon" aria-label="Open menu" className="hover:bg-gray-100">
                   <Menu className="h-5 w-5" />
                 </Button>
               </SheetTrigger>
+
               <SheetContent side="left" className="w-[300px] sm:w-[350px] overflow-y-auto">
                 <div className="flex flex-col space-y-6 pt-6">
-                  {/* Mobile Logo */}
+
+                  {/* Mobile Text Logo */}
                   <div className="flex flex-col items-center">
-                    <div className="relative h-16 w-16 mb-2">
-                      <Image 
-                        src="/logo.jpg" 
-                        alt="Scentia Logo" 
-                        fill
-                        className="object-contain"
-                        priority
-                      />
-                    </div>
-                    <h2 className="text-xl font-serif font-bold tracking-widest text-primary">
-                      Scentia
-                    </h2>
+                    <h1 className="text-2xl font-black uppercase tracking-[0.15em] flex font-sans">
+                      <span className="text-primary">Scent</span>
+                      <span className="text-black ml-1">Haven</span>
+                    </h1>
                   </div>
-                  
+
                   <Separator />
 
-                  {/* Admin Dashboard Link - Mobile */}
                   {isLoggedIn && user?.role === 'admin' && (
                     <>
                       <Link 
@@ -111,14 +100,13 @@ export function Header() {
                     </>
                   )}
 
-                  {/* Mobile Navigation */}
                   <nav className="flex flex-col space-y-1">
                     <Link href="/shop" className="px-4 py-3 rounded-lg text-base font-semibold hover:bg-gray-100 transition-colors">
                       Shop All Fragrances
                     </Link>
-                    
+
                     <Separator className="my-2" />
-                    
+
                     {navLinks.map((link) => (
                       <div key={link.name}>
                         <Link
@@ -151,7 +139,6 @@ export function Header() {
 
                   <Separator />
 
-                  {/* Mobile Quick Links */}
                   <div className="space-y-2">
                     <Link href="/info/about" className="block px-4 py-2 text-sm text-gray-600 hover:text-primary">
                       About Us
@@ -163,35 +150,30 @@ export function Header() {
                       FAQ
                     </Link>
                   </div>
+
                 </div>
               </SheetContent>
             </Sheet>
 
-            {/* Logo */}
+            {/* Desktop Text Logo */}
             <Link href="/" className="flex-shrink-0">
-              <div className="flex flex-col items-center">
-                <div className="relative h-8 w-8 md:h-10 md:w-10">
-                  <Image 
-                    src="/logo.jpg" 
-                    alt="Scent Haven Logo" 
-                    fill
-                    className="object-contain"
-                    priority
-                  />
-                </div>
-                <h1 className="text-xs md:text-sm font-serif font-bold tracking-widest text-primary hover:text-primary/80 transition-colors mt-0.5">
-                  Scent Haven
-                </h1>
-              </div>
+              <h1 className="text-xl md:text-2xl font-extrabold uppercase tracking-[0.18em] flex font-sans">
+                <span className="text-primary">Scent</span>
+                <span className="text-black ml-1 relative">
+                  Haven
+                  {/* Accent underline bar */}
+                  <span className="absolute left-0 -bottom-1 w-full h-[3px] bg-primary"></span>
+                </span>
+              </h1>
             </Link>
+
           </div>
 
-          {/* Desktop Navigation - Center */}
+          {/* Desktop navigation */}
           <nav className="hidden lg:flex lg:items-center lg:gap-1 xl:gap-2">
             {navLinks.map((link) => (
               <div key={link.name} className="relative group">
                 {link.subcategories ? (
-                  // Dropdown for categories with subcategories
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button 
@@ -199,9 +181,6 @@ export function Header() {
                         className="text-sm font-medium hover:text-primary hover:bg-gray-50 px-3 py-2"
                       >
                         {link.name}
-                        {link.featured && (
-                          <ChevronDown className="ml-1 h-3 w-3 opacity-50" />
-                        )}
                         {link.badge && (
                           <Badge variant="destructive" className="ml-2 text-xs py-0 px-1.5">
                             {link.badge}
@@ -224,7 +203,6 @@ export function Header() {
                     </DropdownMenuContent>
                   </DropdownMenu>
                 ) : (
-                  // Regular link
                   <Link href={link.href}>
                     <Button 
                       variant="ghost" 
@@ -243,12 +221,11 @@ export function Header() {
             ))}
           </nav>
 
-          {/* Utility Icons - Right */}
+          {/* Right side: actions */}
           <div className="flex items-center gap-1 sm:gap-2">
-            {/* Search */}
+
             <SearchCommand />
 
-            {/* Wishlist - Hidden on small mobile */}
             <Button 
               variant="ghost" 
               size="icon" 
@@ -258,7 +235,6 @@ export function Header() {
               <Heart className="h-5 w-5" />
             </Button>
 
-            {/* Admin Dashboard - Desktop (only for admins) */}
             {isLoggedIn && user?.role === 'admin' && (
               <Link href="/admin">
                 <Button 
@@ -266,7 +242,6 @@ export function Header() {
                   size="icon" 
                   aria-label="Admin Dashboard"
                   className="hidden lg:flex hover:bg-gray-100 relative"
-                  title="Admin Dashboard"
                 >
                   <LayoutDashboard className="h-5 w-5 text-primary" />
                   <span className="absolute -top-1 -right-1 flex h-2 w-2 rounded-full bg-primary"></span>
@@ -274,7 +249,6 @@ export function Header() {
               </Link>
             )}
 
-            {/* User Account */}
             {isLoggedIn ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -282,19 +256,20 @@ export function Header() {
                     <User className="h-5 w-5" />
                   </Button>
                 </DropdownMenuTrigger>
+
                 <DropdownMenuContent align="end" className="w-56">
                   <DropdownMenuLabel>
                     <div>
-                      <p className="font-semibold">Welcome back!</p>
+                      <p className="font-semibold">Welcome back</p>
                       <p className="text-xs text-gray-500 font-normal">{user?.email}</p>
                       {user?.role === 'admin' && (
                         <Badge variant="default" className="mt-1 text-xs">Admin</Badge>
                       )}
                     </div>
                   </DropdownMenuLabel>
+
                   <DropdownMenuSeparator />
-                  
-                  {/* Admin Dashboard in dropdown for mobile/tablet */}
+
                   {user?.role === 'admin' && (
                     <>
                       <Link href="/admin">
@@ -306,7 +281,7 @@ export function Header() {
                       <DropdownMenuSeparator className="lg:hidden" />
                     </>
                   )}
-                  
+
                   <Link href="/account">
                     <DropdownMenuItem>
                       <User className="mr-2 h-4 w-4" />
@@ -325,10 +300,12 @@ export function Header() {
                       Wishlist
                     </DropdownMenuItem>
                   </Link>
+
                   <DropdownMenuSeparator />
+
                   <DropdownMenuItem 
                     onClick={handleLogout} 
-                    className="text-red-500 cursor-pointer focus:text-red-600"
+                    className="text-red-500 cursor-pointer"
                   >
                     <LogOut className="mr-2 h-4 w-4" />
                     Sign Out
@@ -343,7 +320,6 @@ export function Header() {
               </Link>
             )}
 
-            {/* Shopping Cart */}
             <Link href="/cart">
               <Button 
                 variant="ghost" 
@@ -359,14 +335,15 @@ export function Header() {
                 )}
               </Button>
             </Link>
+
           </div>
         </div>
       </div>
 
-      {/* Secondary Navigation Bar - Desktop Only */}
       <div className="hidden lg:block border-b border-gray-100 bg-gray-50/50">
         <div className="container px-4 sm:px-6 lg:px-8">
           <div className="flex h-10 items-center justify-between text-xs text-gray-600">
+
             <div className="flex items-center gap-6">
               <Link href="/shop?sort=newest" className="hover:text-primary transition-colors font-medium">
                 New Arrivals
@@ -381,6 +358,7 @@ export function Header() {
                 Women's Collection
               </Link>
             </div>
+
             <div className="flex items-center gap-6">
               <Link href="/info/about" className="hover:text-primary transition-colors">
                 About
@@ -392,6 +370,7 @@ export function Header() {
                 FAQ
               </Link>
             </div>
+
           </div>
         </div>
       </div>

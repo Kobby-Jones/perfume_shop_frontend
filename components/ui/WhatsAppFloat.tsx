@@ -14,8 +14,8 @@ export function WhatsAppFloat() {
   const [isOpen, setIsOpen] = useState(false);
   
   // Replace with your actual WhatsApp business number (format: country code + number, no + or spaces)
-  const whatsappNumber = '+233598738535'; // Example: Ghana number
-  const defaultMessage = encodeURIComponent('Hello! I have a question about Scentia Perfumes.');
+  const whatsappNumber = '+233503580927'; // Example: Ghana number
+  const defaultMessage = encodeURIComponent('Hello! I have a question about Scent Haven Perfumes.');
   const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${defaultMessage}`;
 
   return (
@@ -30,7 +30,7 @@ export function WhatsAppFloat() {
                   <MessageCircle className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-sm text-gray-900">Scentia Support</h3>
+                  <h3 className="font-semibold text-sm text-gray-900">Scent Haven Support</h3>
                   <p className="text-xs text-gray-500">Typically replies instantly</p>
                 </div>
               </div>
