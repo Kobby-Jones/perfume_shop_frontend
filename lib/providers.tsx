@@ -8,6 +8,7 @@ import { CartProvider } from './hooks/useCart';
 import { AuthProvider } from './hooks/useAuth';
 import { WishlistProvider } from './hooks/useWishlist';
 import { GlobalAlertModal } from '@/components/shared/ModalAlert';
+import { ErrorBoundary } from '@/components/shared/ErrorBoundary';
 
 // Create a client instance outside of the component to prevent re-instantiation on every render.
 // We disable window focus refetching to enhance UX and performance by default.
@@ -27,6 +28,7 @@ const queryClient = new QueryClient({
  */
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
+    <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
       <AuthProvider> 
         <CartProvider>
@@ -39,5 +41,6 @@ export function Providers({ children }: { children: React.ReactNode }) {
         </CartProvider>
       </AuthProvider>
     </QueryClientProvider>
+    </ErrorBoundary>
   );
 }

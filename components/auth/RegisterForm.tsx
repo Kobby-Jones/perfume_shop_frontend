@@ -22,7 +22,12 @@ const registerSchema = z.object({
   name: z.string().min(2, { message: "Name is required." }),
   // Basic regex for Ghana phone numbers (starts with 0 and is 10 digits)
   phoneNumber: z.string().regex(/^0\d{9}$/, { message: "Invalid phone number. Use format 024XXXXXXX" }),
-  password: z.string().min(6, { message: "Min 6 characters." }),
+  password: z
+    .string()
+    .min(8, { message: "Min 8 characters." })
+    .regex(/[A-Z]/, { message: "Must contain an uppercase letter." })
+    .regex(/[a-z]/, { message: "Must contain a lowercase letter." })
+    .regex(/[0-9]/, { message: "Must contain a number." }),
 });
 
 const otpSchema = z.object({

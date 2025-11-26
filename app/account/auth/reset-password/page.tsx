@@ -20,7 +20,12 @@ import { apiFetch } from '@/lib/api/httpClient';
 const resetPasswordSchema = z.object({
     phoneNumber: z.string().min(10, "Phone number is required"),
     otp: z.string().length(6, "OTP must be 6 digits"),
-    newPassword: z.string().min(6, "Password must be at least 6 characters"),
+   newPassword: z
+  .string()
+  .min(8, { message: "Min 8 characters." })
+  .regex(/[A-Z]/, { message: "Must contain an uppercase letter." })
+  .regex(/[a-z]/, { message: "Must contain a lowercase letter." })
+  .regex(/[0-9]/, { message: "Must contain a number." }),
     confirmPassword: z.string(),
 }).refine((data) => data.newPassword === data.confirmPassword, {
     message: "Passwords do not match",
@@ -29,10 +34,9 @@ const resetPasswordSchema = z.object({
 
 type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>;
 
-// ✅ STEP 1: Rename your component to something like "Content" or "Inner"
 function ResetPasswordContent() {
     const router = useRouter();
-    const searchParams = useSearchParams(); // ✅ This is what needs Suspense
+    const searchParams = useSearchParams();
     const phoneParam = searchParams.get('phone') || '';
 
     const form = useForm<ResetPasswordFormData>({

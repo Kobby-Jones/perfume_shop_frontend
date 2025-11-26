@@ -17,8 +17,13 @@ import { apiFetch } from '@/lib/api/httpClient';
 
 // Password schema
 const passwordSchema = z.object({
-  currentPassword: z.string().min(6, { message: 'Required for verification.' }),
-  newPassword: z.string().min(8, { message: 'New password must be at least 8 characters.' }),
+ currentPassword: z.string().min(8, { message: 'Required for verification.' }),
+ newPassword: z
+  .string()
+  .min(8, { message: "Min 8 characters." })
+  .regex(/[A-Z]/, { message: "Must contain an uppercase letter." })
+  .regex(/[a-z]/, { message: "Must contain a lowercase letter." })
+  .regex(/[0-9]/, { message: "Must contain a number." }),
   confirmPassword: z.string(),
 }).refine((data) => data.newPassword === data.confirmPassword, {
   message: 'Passwords do not match.',
