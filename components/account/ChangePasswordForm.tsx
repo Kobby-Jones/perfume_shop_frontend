@@ -34,7 +34,7 @@ type PasswordFormData = z.infer<typeof passwordSchema>;
 
 /**
  * Integrated Change Password Form
- * - Uses API endpoint: PUT /account/password
+ * - Uses API endpoint: PUT /auth/password
  * - Displays toast notifications via Sonner
  * - Resets form on success
  */
@@ -51,7 +51,7 @@ export function ChangePasswordForm() {
   // Query mutation for password change
   const changePasswordMutation = useMutation({
     mutationFn: async (data: PasswordFormData) => {
-      return apiFetch('/account/password', {
+      return apiFetch('/auth/password', {
         method: 'PUT',
         body: JSON.stringify({
           currentPassword: data.currentPassword,
