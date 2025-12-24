@@ -135,7 +135,8 @@ export function ProductForm({ open, onOpenChange, product }: ProductFormProps) {
     },
   });
 
-  const onSubmit = (data: ProductFormInput) => {
+const onSubmit = (data: ProductFormInput) => {
+    console.log('Form submitted with data:', data);
     // Transform string inputs to numbers for API
     const transformedData: ProductFormOutput = {
       ...data,
@@ -144,6 +145,9 @@ export function ProductForm({ open, onOpenChange, product }: ProductFormProps) {
     };
     mutation.mutate(transformedData);
   };
+
+  // Debug: Log form errors
+  console.log('Form errors:', form.formState.errors);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -225,7 +229,12 @@ export function ProductForm({ open, onOpenChange, product }: ProductFormProps) {
           </DialogTitle>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form 
+          onSubmit={form.handleSubmit(onSubmit, (errors) => {
+            console.log('Validation errors:', errors);
+          })} 
+          className="space-y-4"
+        >
             <div className="grid grid-cols-2 gap-4">
                 <FormField control={form.control} name="name" render={({ field }) => (
                     <FormItem className="col-span-2 md:col-span-1">
@@ -267,7 +276,7 @@ export function ProductForm({ open, onOpenChange, product }: ProductFormProps) {
                     <FormItem>
                       <FormLabel>Price (GHS)</FormLabel>
                       <FormControl>
-                        <Input 
+                        <Input
                           type="number" 
                           step="0.01" 
                           {...field}

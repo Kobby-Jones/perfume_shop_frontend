@@ -171,7 +171,7 @@ export function Footer() {
               <h3 className="text-sm font-semibold text-foreground mb-3">Contact Us</h3>
               <div className="flex items-start gap-2 text-xs md:text-sm text-foreground/70 hover:text-primary transition-colors group">
                 <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0 text-primary group-hover:scale-110 transition-transform" />
-                <span>123 Fragrance Ave, Accra, Ghana</span>
+                <span>Store @ B 74/2 Chiraa Station, Sunyani, Ghana</span>
               </div>
               <div className="flex items-center gap-2 text-xs md:text-sm text-foreground/70 hover:text-primary transition-colors group">
                 <Phone className="h-4 w-4 flex-shrink-0 text-primary group-hover:scale-110 transition-transform" />
